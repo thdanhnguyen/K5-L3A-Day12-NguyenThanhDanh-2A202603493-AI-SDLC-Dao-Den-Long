@@ -1,8 +1,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { Simulation } from '../sim/engine';
 import { Mulberry32 } from '../sim/prng';
 import type { StepInput } from '../sim/types';
+
+function forceGc(): void {
+  try {
+    if (typeof global.gc === 'function') {
+      global.gc();
+      return;
+    }
+    v8.setFlagsFromString('--expose_gc');
+    const gcFn = vm.runInNewContext('gc') as (() => void) | undefined;
+    if (typeof gcFn === 'function') gcFn();
+  } catch {
+    // ignore if GC cannot be forced
+  }
+}
 
 function parseArgs(argv: string[]): { seed: number; nights: number; out: string } {
   let seed: number | null = null;
@@ -39,8 +55,8 @@ function parseArgs(argv: string[]): { seed: number; nights: number; out: string 
   return { seed, nights, out };
 }
 
-function getRssMb(): number {
-  return Math.round((process.memoryUsage().rss / (1024 * 1024)) * 100) / 100;
+function getMemMb(): number {
+  return Math.round((process.memoryUsage().heapUsed / (1024 * 1024)) * 100) / 100;
 }
 
 function main(): void {
@@ -104,18 +120,14 @@ function main(): void {
     } finally {
       sim = null;
       if (i === 0) {
-        if (typeof global.gc === 'function') {
-          global.gc();
-        }
-        memStartMb = getRssMb();
+        forceGc();
+        memStartMb = getMemMb();
       }
     }
   }
 
-  if (typeof global.gc === 'function') {
-    global.gc();
-  }
-  memEndMb = getRssMb();
+  forceGc();
+  memEndMb = getMemMb();
 
   const durationS = Math.round(((Date.now() - startMs) / 1000) * 100) / 100;
   const payload = {
