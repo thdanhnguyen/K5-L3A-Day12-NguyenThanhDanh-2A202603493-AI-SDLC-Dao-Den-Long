@@ -73,7 +73,7 @@ export function stepWanderingGirl(
     girl.found = true;
     girl.celebrationTimer = 3.0;
     const before = player.carried;
-    player.carried = Math.min(TUNING.carry_capacity, player.carried + 5);
+    player.carried = Math.min(player.capacity, player.carried + 5);
     const gained = player.carried - before;
     buffs.lastNotice =
       gained > 0
@@ -98,7 +98,7 @@ export function applyCreativeMoteBuff(
     if (player.flames < TUNING.flames) {
       player.flames += 1;
       buffs.lastNotice = 'Đom đóm Xanh Lá: Hồi năng lượng Tỏa Sáng & +1 ngọn lửa!';
-    } else if (player.carried < TUNING.carry_capacity) {
+    } else if (player.carried < player.capacity) {
       player.carried += 1;
       buffs.lastNotice = 'Đom đóm Xanh Lá: Hồi ngay Tỏa Sáng & +1 ánh sáng!';
     } else {

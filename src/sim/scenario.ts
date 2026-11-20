@@ -20,6 +20,7 @@ const VALID_SHADE_STATES = new Set<ShadeBehaviorState>([
   'chase',
   'recoil',
   'stunned',
+  'drain',
 ]);
 
 const VALID_DRIFTER_STATES = new Set<DrifterBehaviorState>([
@@ -115,6 +116,12 @@ export function validateAndParseScenario(
         'scenario.player.charm_ticks'
       );
     }
+    if ('successful_lights' in parsed.player && parsed.player.successful_lights !== undefined) {
+      player.successful_lights = parseNonNegInt(
+        parsed.player.successful_lights,
+        'scenario.player.successful_lights'
+      );
+    }
     scenario.player = player;
   }
 
@@ -198,11 +205,19 @@ export function validateAndParseScenario(
           `scenario.shades[${i}].state_ticks_left`
         );
       }
+      let target_lantern_id: string | undefined;
+      if ('target_lantern_id' in item && item.target_lantern_id !== undefined) {
+        if (typeof item.target_lantern_id !== 'string') {
+          throw new FormatError(`scenario.shades[${i}].target_lantern_id must be a string`);
+        }
+        target_lantern_id = item.target_lantern_id;
+      }
       shades.push({
         id: typeof item.id === 'string' ? item.id : undefined,
         pos,
         state,
         state_ticks_left,
+        target_lantern_id,
       });
     }
     scenario.shades = shades;
@@ -294,6 +309,15 @@ export function validateAndParseScenario(
           throw new FormatError(`scenario.lanterns[${i}].lit must be a boolean`);
         }
         entry.lit = item.lit;
+      }
+      if ('fuel' in item && item.fuel !== undefined) {
+        entry.fuel = parseNonNegNumber(item.fuel, `scenario.lanterns[${i}].fuel`);
+      }
+      if ('ever_lit' in item && item.ever_lit !== undefined) {
+        if (typeof item.ever_lit !== 'boolean') {
+          throw new FormatError(`scenario.lanterns[${i}].ever_lit must be a boolean`);
+        }
+        entry.ever_lit = item.ever_lit;
       }
       lanterns.push(entry);
     }
