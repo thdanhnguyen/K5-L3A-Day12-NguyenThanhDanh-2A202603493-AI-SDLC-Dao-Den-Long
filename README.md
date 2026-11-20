@@ -1,6 +1,6 @@
 # Đảo Đèn Lồng — Bình Minh (`v1.0.0` · Contract `v1.3`)
 
-**Link release:** https://github.com/thdanhnguyen/K5-L3-LAB-Day12-NguyenThanhDanh-2A202603493-AI-SDLC-Dao-Den-Long/releases/tag/v1.0.0
+**Link release:** https://github.com/thdanhnguyen/K5-L3-Day12-NguyenThanhDanh-2A202603493-AI-SDLC-Dao-Den-Long/releases/tag/v1.0.0
 
 Game phiêu lưu 3D trên nền WebGL (Three.js + TypeScript) kể về **Mây**, người giữ đèn nhỏ tuổi cùng **Chim Giấy Đèn Lồng** vượt qua 3 Đêm (**Đảo Bến**, **Đảo Cau**, **Đảo Chuông**) để giữ các Đèn Lồng Lớn rực sáng trước bình minh.
 
