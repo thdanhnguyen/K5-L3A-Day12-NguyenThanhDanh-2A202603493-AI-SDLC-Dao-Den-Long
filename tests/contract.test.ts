@@ -38,7 +38,7 @@ function countDecimals(n: number): number {
   return dot === -1 ? 0 : s.length - dot - 1;
 }
 
-describe('Headless CLI — Test Contract v1.1 (Regression + Phase 2)', () => {
+describe('Headless CLI — Test Contract v1.2 (Regression + Phase 3)', () => {
   it('01: auto-picks motes up to carry_capacity (10) without adding score on pickup', () => {
     const out = path.join(workDir, '01.jsonl');
     const res = runCli([
@@ -202,7 +202,7 @@ describe('Headless CLI — Test Contract v1.1 (Regression + Phase 2)', () => {
     });
   });
 
-  it('07: Contract v1.1 snapshot schema & 3-decimal rounding on default Night 1 run', () => {
+  it('07: Contract v1.2 snapshot schema & 3-decimal rounding on default Night 1 run', () => {
     const out = path.join(workDir, '07.jsonl');
     const res = runCli([
       '--seed', '42', '--night', '1', '--ticks', '320', '--snapshot-every', '20', '--out', out,
