@@ -182,8 +182,8 @@ describe('Headless CLI — Test Contract v1.0', () => {
       flames: 1,
       dropped: Math.floor(5 * TUNING.hit_drop_ratio),
     });
-    // Second hit must occur after invuln_s (1.5s = 90 ticks)
-    expect(hits[1].tick).toBeGreaterThanOrEqual(91);
+    // Second hit must occur right after invuln_s (1.5s = 90 ticks)
+    expect(hits[1].tick).toBe(91);
     expect(hits[1].data.flames).toBe(0);
 
     const over = records.find((r) => r.type === 'event' && r.name === 'game_over')!;
@@ -274,5 +274,101 @@ describe('Headless CLI — Test Contract v1.0', () => {
     ]);
     expect(resBadInputs.status).toBe(2);
     expect(resBadInputs.stderr.trim().length).toBeGreaterThan(0);
+  });
+
+  it('09: exact boundary pickup distance and exact cooldown/stun tick timing (no IEEE-754 drift)', () => {
+    const scenPath = path.join(workDir, '09-scen.json');
+    const inPath = path.join(workDir, '09-in.json');
+    const out = path.join(workDir, '09.jsonl');
+
+    // Player walks +Z at 6 m/s (0.1 m/tick) -> after 10 ticks at z=1.0, mote at z=2.6 is exact dist=1.6 <= pickup_radius
+    // Pulse at tick 0 -> tick 1; cooldown=2.0s (120 ticks) -> second pulse at tick 120 -> tick 121 succeeds; stun=3.0s (180 ticks) -> recovers at tick 181
+    writeFileSync(
+      scenPath,
+      JSON.stringify({
+        player: { pos: [0, 0, 0], carried: 3, flames: 3 },
+        random_motes: false,
+        random_shades: false,
+        motes: [[0, 0, 2.6]],
+        shades: [{ id: 'S1', pos: [4, 0, 0] }],
+        time_left_s: 180,
+      }),
+      'utf8'
+    );
+    writeFileSync(
+      inPath,
+      JSON.stringify({
+        frames: [
+          { tick: 0, move: [0, 1], pulse: true },
+          { tick: 1, pulse: false },
+          { tick: 10, move: [0, 0] },
+          { tick: 120, pulse: true },
+          { tick: 121, pulse: false },
+        ],
+      }),
+      'utf8'
+    );
+
+    const res = runCli([
+      '--seed', '9', '--night', '1', '--scenario', scenPath, '--inputs', inPath, '--ticks', '310', '--snapshot-every', '1', '--out', out,
+    ]);
+    expect(res.status).toBe(0);
+
+    const records = parseJsonl(out);
+    const picked = records.find((r) => r.type === 'event' && r.name === 'mote_picked');
+    expect(picked).toBeDefined();
+    expect(picked!.tick).toBe(10);
+
+    const pulses = records.filter((r) => r.type === 'event' && r.name === 'pulse');
+    expect(pulses.map((p) => p.tick)).toEqual([1, 121]);
+
+    const snap180 = records.find((r) => r.type === 'snapshot' && r.tick === 180)!;
+    const snap181 = records.find((r) => r.type === 'snapshot' && r.tick === 181)!;
+    expect(snap180.shades[0].state).toBe('stunned');
+    expect(snap181.shades[0].state).toBe('chase');
+  });
+
+  it('10: jump vertical arc and cam_yaw_deg=90 world movement follow Test Contract v1.0', () => {
+    const scenPath = path.join(workDir, '10-scen.json');
+    const inPath = path.join(workDir, '10-in.json');
+    const out = path.join(workDir, '10.jsonl');
+
+    writeFileSync(
+      scenPath,
+      JSON.stringify({
+        player: { pos: [0, 0, 0], carried: 0, flames: 3 },
+        random_motes: false,
+        random_shades: false,
+        motes: [],
+        shades: [],
+        time_left_s: 180,
+      }),
+      'utf8'
+    );
+    writeFileSync(
+      inPath,
+      JSON.stringify({
+        frames: [
+          { tick: 0, move: [0, 1], cam_yaw_deg: 90, jump: true },
+          { tick: 1, jump: false },
+          { tick: 60, move: [0, 0] },
+        ],
+      }),
+      'utf8'
+    );
+
+    const res = runCli([
+      '--seed', '10', '--night', '1', '--scenario', scenPath, '--inputs', inPath, '--ticks', '80', '--snapshot-every', '10', '--out', out,
+    ]);
+    expect(res.status).toBe(0);
+
+    const records = parseJsonl(out);
+    const snap20 = records.find((r) => r.type === 'snapshot' && r.tick === 20)!;
+    const snap60 = records.find((r) => r.type === 'snapshot' && r.tick === 60)!;
+
+    expect(snap20.player.pos[1]).toBeGreaterThan(0.5);
+    expect(snap60.player.pos[0]).toBeCloseTo(6.0, 2);
+    expect(snap60.player.pos[1]).toBe(0);
+    expect(snap60.player.pos[2]).toBe(0);
   });
 });

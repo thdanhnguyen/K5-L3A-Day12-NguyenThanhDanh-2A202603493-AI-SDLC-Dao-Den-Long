@@ -36,12 +36,18 @@ import type {
 
 const GRAVITY = 20.0;
 const JUMP_VELOCITY = 7.5;
+const EPS = 1e-6;
 const INITIAL_RANDOM_MOTES = 18;
 const MAX_RANDOM_MOTES = 20;
 const MOTE_RESPAWN_TICKS = 360;
 const INITIAL_RANDOM_SHADES = 3;
 const MAX_RANDOM_SHADES = 6;
 const SHADE_RESPAWN_TICKS = 1080;
+
+function stepTimer(v: number, dt: number): number {
+  const next = v - dt;
+  return next <= EPS ? 0 : next;
+}
 
 export class Simulation {
   readonly seed: number;
@@ -283,16 +289,16 @@ export class Simulation {
     this.timeLeftS = Math.max(0, this.initialTimeLeftS - this.simTick * DT);
 
     // 1. Update timers
-    this.player.invulnTimer = Math.max(0, this.player.invulnTimer - DT);
-    this.player.pulseCooldown = Math.max(0, this.player.pulseCooldown - DT);
+    this.player.invulnTimer = stepTimer(this.player.invulnTimer, DT);
+    this.player.pulseCooldown = stepTimer(this.player.pulseCooldown, DT);
     if (this.creative) {
-      this.creativeBuffs.powerTimer = Math.max(0, this.creativeBuffs.powerTimer - DT);
-      this.creativeBuffs.speedTimer = Math.max(0, this.creativeBuffs.speedTimer - DT);
+      this.creativeBuffs.powerTimer = stepTimer(this.creativeBuffs.powerTimer, DT);
+      this.creativeBuffs.speedTimer = stepTimer(this.creativeBuffs.speedTimer, DT);
     }
 
     for (const shade of this.shades) {
       if (shade.state === 'stunned') {
-        shade.stunTimer = Math.max(0, shade.stunTimer - DT);
+        shade.stunTimer = stepTimer(shade.stunTimer, DT);
         if (shade.stunTimer === 0) {
           shade.state = 'chase';
         }
@@ -346,7 +352,7 @@ export class Simulation {
 
       const stunnedIds: string[] = [];
       for (const shade of this.shades) {
-        if (distXZ(this.player.pos, shade.pos) <= effectiveRadius) {
+        if (distXZ(this.player.pos, shade.pos) <= effectiveRadius + EPS) {
           let dx = shade.pos[0] - this.player.pos[0];
           let dz = shade.pos[2] - this.player.pos[2];
           const d = Math.hypot(dx, dz);
@@ -392,7 +398,7 @@ export class Simulation {
       for (const lantern of this.lanterns) {
         if (lantern.lit) continue;
         const d = distXZ(this.player.pos, lantern.pos);
-        if (d <= TUNING.interact_radius) {
+        if (d <= TUNING.interact_radius + EPS) {
           if (
             d < bestDist - 1e-9 ||
             (Math.abs(d - bestDist) <= 1e-9 &&
@@ -458,7 +464,7 @@ export class Simulation {
       for (let i = 0; i < this.motes.length; i++) {
         if (this.player.carried >= TUNING.carry_capacity) break;
         const mote = this.motes[i];
-        if (distXZ(this.player.pos, mote.pos) <= TUNING.pickup_radius) {
+        if (distXZ(this.player.pos, mote.pos) <= TUNING.pickup_radius + EPS) {
           this.motes.splice(i, 1);
           i--;
           this.player.carried += 1;
@@ -568,7 +574,7 @@ export class Simulation {
         const hitRadius =
           TUNING.shade_hit_radius *
           (this.creative && shade.variant === 'large' ? 1.25 : 1.0);
-        if (distXZ(this.player.pos, shade.pos) <= hitRadius) {
+        if (distXZ(this.player.pos, shade.pos) <= hitRadius + EPS) {
           this.player.flames = Math.max(0, this.player.flames - 1);
           const dropped = Math.floor(
             this.player.carried * TUNING.hit_drop_ratio
