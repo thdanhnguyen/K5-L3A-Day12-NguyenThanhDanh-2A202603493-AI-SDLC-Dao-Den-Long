@@ -57,3 +57,10 @@
   - Headless 21.600 tick Đêm 3 hoàn thành trong **~0.48s** (`479 ms`, ngưỡng yêu cầu `≤ 30s`).
   - Đo thực tế bản 3D trên trình duyệt của người dùng (`http://localhost:4173/`): **54 FPS** (đạt ngưỡng `≥ 30 FPS`).
   - Ước tính token Phase 2: ~75.000–95.000 tokens (giữ gọn bằng cách tái sử dụng toàn bộ kiến trúc `src/sim/` và chỉ mở rộng thêm `maps.ts` + cập nhật có chọn lọc).
+
+---
+
+## 7. Nhật ký & Đánh giá Phase 3 (TICKET-03 · Contract v1.2)
+- **Xử lý Change Request (`[THAY THẾ]`):** Viết [adr-001-lantern-fuel-and-dawn.md](adr-001-lantern-fuel-and-dawn.md) và [CHANGELOG.md](../../CHANGELOG.md) trước khi sửa code; giữ nguyên 14/15 test Phase 1–2 không bị thay thế và chỉ cập nhật đúng test `02` (không còn thắng sớm `all_lit`) kèm lý do rõ ràng.
+- **Độ chính xác nhiên liệu & test:** Lưu dầu bằng số nguyên `1/60` (`fuelUnits` max `6000`) nên phép hao `1/s`, hút `5/s` và `ceil((100 - fuel)/10)` không có sai số dấu phẩy động. Test `16` chứng minh đèn đầy `100` sau 5 tick tự nhiên giảm còn `99.917` và cần đúng `1` đom đóm để châm lại.
+- **Hiệu năng & Token Phase 3:** Headless 18.000 tick Đêm 3 hoàn thành trong `~0.35s`; ước tính token Phase 3: ~40.000–55.000 tokens.
