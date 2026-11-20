@@ -4,7 +4,7 @@
   "random_shades": false,
   "motes": [],
   "shades": [
-    { "id": "S1", "pos": [0.5, 0, 0] }
+    { "id": "S1", "pos": [0.5, 0, 0], "state": "chase" }
   ],
-  "time_left_s": 180
+  "time_left_s": 300
 }
