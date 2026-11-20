@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { TUNING, distXZ } from '../sim/config';
 import type {
+  CharmState,
   CreativeBuffs,
+  DrifterState,
   LanternState,
   MoteColor,
   MoteState,
@@ -12,9 +14,9 @@ import type {
 } from '../sim/types';
 import { createGlowSpriteTexture, createNonLaTexture } from './textures';
 
-const MOTE_COLORS: Record<MoteColor, string> = {
-  gold: '#ffd166',
-  red: '#ff5a5f',
+const CREATIVE_MOTE_COLORS: Record<MoteColor, string> = {
+  gold: '#FFF6C2',
+  red: '#FF5A5F',
   blue: '#38bdf8',
   green: '#4ade80',
 };
@@ -22,9 +24,9 @@ const MOTE_COLORS: Record<MoteColor, string> = {
 export class EntityVisuals {
   private readonly scene: THREE.Scene;
   private readonly glowTex = createGlowSpriteTexture(
-    'rgba(255, 255, 255, 1)',
-    'rgba(255, 235, 175, 0.58)',
-    'rgba(255, 200, 120, 0)'
+    'rgba(255, 246, 194, 1)',
+    'rgba(255, 229, 138, 0.58)',
+    'rgba(255, 179, 71, 0)'
   );
 
   // Player Mây
@@ -34,6 +36,7 @@ export class EntityVisuals {
   private readonly hatLanternCore: THREE.Mesh;
   private readonly hatLanternGlow: THREE.Sprite;
   private readonly orbitingFireflies: THREE.Mesh[] = [];
+  private readonly dashRing: THREE.Mesh;
   private readonly buffRing: THREE.Mesh;
   private readonly buffRingMat: THREE.MeshBasicMaterial;
   private readonly pulseWave: THREE.Mesh;
@@ -54,30 +57,31 @@ export class EntityVisuals {
   private prevBestLanternProgress = 0;
   private manualGuideTimer = 0;
 
-  // Bé Lạc (Wandering Girl)
+  // Bé Lạc
   private readonly girlGroup = new THREE.Group();
   private readonly girlCelebration: THREE.Group;
 
   // Dynamic pools
   private readonly moteMeshes = new Map<string, THREE.Group>();
   private readonly shadeMeshes = new Map<string, THREE.Group>();
+  private readonly drifterMeshes = new Map<string, THREE.Group>();
+  private readonly charmMeshes = new Map<string, THREE.Group>();
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
 
-    // --- Build Mây ---
+    // --- Build Mây (Standard palette: Robe #E8E2D0, Scarf #C8102E) ---
     const robe = new THREE.Mesh(
       new THREE.ConeGeometry(0.46, 1.08, 14),
-      new THREE.MeshStandardMaterial({ color: '#3b829c', roughness: 0.68 })
+      new THREE.MeshStandardMaterial({ color: '#E8E2D0', roughness: 0.65 })
     );
     robe.position.y = 0.56;
     robe.castShadow = true;
     this.playerBody.add(robe);
 
-    // Flowing warm amber sash/scarf
     const sash = new THREE.Mesh(
-      new THREE.TorusGeometry(0.28, 0.06, 8, 16),
-      new THREE.MeshStandardMaterial({ color: '#ffb347', roughness: 0.65 })
+      new THREE.TorusGeometry(0.28, 0.065, 8, 16),
+      new THREE.MeshStandardMaterial({ color: '#C8102E', roughness: 0.6 })
     );
     sash.rotation.x = Math.PI / 2;
     sash.position.y = 0.98;
@@ -91,12 +95,10 @@ export class EntityVisuals {
     head.castShadow = true;
     this.playerBody.add(head);
 
-    // Woven Vietnamese Nón Lá
-    const nonLaTex = createNonLaTexture();
     const nonLa = new THREE.Mesh(
       new THREE.ConeGeometry(0.68, 0.36, 24),
       new THREE.MeshStandardMaterial({
-        map: nonLaTex,
+        map: createNonLaTexture(),
         color: '#f7d88c',
         roughness: 0.72,
       })
@@ -105,10 +107,9 @@ export class EntityVisuals {
     nonLa.castShadow = true;
     this.playerBody.add(nonLa);
 
-    // Hanging mini lantern at front of nón lá
     const stick = new THREE.Mesh(
       new THREE.CylinderGeometry(0.018, 0.018, 0.4, 6),
-      new THREE.MeshStandardMaterial({ color: '#6b4228' })
+      new THREE.MeshStandardMaterial({ color: '#6B4A2F' })
     );
     stick.rotation.x = Math.PI / 3;
     stick.position.set(0, 1.4, 0.58);
@@ -116,7 +117,7 @@ export class EntityVisuals {
 
     this.hatLanternCore = new THREE.Mesh(
       new THREE.SphereGeometry(0.12, 10, 10),
-      new THREE.MeshBasicMaterial({ color: '#ffe58f' })
+      new THREE.MeshBasicMaterial({ color: '#FFE9B0' })
     );
     this.hatLanternCore.position.set(0, 1.24, 0.72);
     this.playerBody.add(this.hatLanternCore);
@@ -124,7 +125,7 @@ export class EntityVisuals {
     this.hatLanternGlow = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: this.glowTex,
-        color: '#ffd166',
+        color: '#FFB347',
         transparent: true,
         opacity: 0.85,
         blending: THREE.AdditiveBlending,
@@ -135,72 +136,72 @@ export class EntityVisuals {
     this.hatLanternGlow.position.copy(this.hatLanternCore.position);
     this.playerBody.add(this.hatLanternGlow);
 
-    this.hatLanternLight = new THREE.PointLight('#ffc466', 6.0, 18, 1.1);
+    this.hatLanternLight = new THREE.PointLight('#FFB347', 6.5, 18, 1.1);
     this.hatLanternLight.position.set(0, 1.45, 0.72);
     this.playerBody.add(this.hatLanternLight);
 
-    // Grounded contact shadow disc
     const contactShadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.55, 20),
-      new THREE.MeshBasicMaterial({
-        color: '#0e0a1c',
-        transparent: true,
-        opacity: 0.32,
-      })
+      new THREE.MeshBasicMaterial({ color: '#0e0a1c', transparent: true, opacity: 0.32 })
     );
     contactShadow.rotation.x = -Math.PI / 2;
     contactShadow.position.y = 0.03;
     this.playerGroup.add(contactShadow);
     this.playerGroup.add(this.playerBody);
 
-    // Orbiting fireflies representing carried motes
     for (let i = 0; i < TUNING.carry_capacity; i++) {
       const orb = new THREE.Mesh(
-        new THREE.SphereGeometry(0.085, 8, 8),
-        new THREE.MeshBasicMaterial({ color: '#ffe58f' })
+        new THREE.SphereGeometry(0.08, 8, 8),
+        new THREE.MeshBasicMaterial({ color: '#FFE58A' })
       );
       orb.visible = false;
       this.orbitingFireflies.push(orb);
       this.playerGroup.add(orb);
     }
 
-    // Active buff ring on ground
+    this.dashRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.55, 0.95, 24),
+      new THREE.MeshBasicMaterial({
+        color: '#F2C14E',
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+      })
+    );
+    this.dashRing.rotation.x = -Math.PI / 2;
+    this.dashRing.position.y = 0.3;
+    this.dashRing.visible = false;
+    this.playerGroup.add(this.dashRing);
+
     this.buffRingMat = new THREE.MeshBasicMaterial({
-      color: '#ff5a5f',
+      color: '#FF5A5F',
       transparent: true,
       opacity: 0.72,
       side: THREE.DoubleSide,
     });
-    this.buffRing = new THREE.Mesh(
-      new THREE.RingGeometry(0.78, 1.0, 28),
-      this.buffRingMat
-    );
+    this.buffRing = new THREE.Mesh(new THREE.RingGeometry(0.78, 1.0, 28), this.buffRingMat);
     this.buffRing.rotation.x = -Math.PI / 2;
     this.buffRing.position.y = 0.06;
     this.buffRing.visible = false;
     this.playerGroup.add(this.buffRing);
     this.scene.add(this.playerGroup);
 
-    // Pulse shockwave mesh
     this.pulseWaveMat = new THREE.MeshBasicMaterial({
-      color: '#ffd166',
+      color: '#F2C14E',
       transparent: true,
       opacity: 0,
       side: THREE.DoubleSide,
     });
-    this.pulseWave = new THREE.Mesh(
-      new THREE.RingGeometry(0.82, 1.0, 48),
-      this.pulseWaveMat
-    );
+    this.pulseWave = new THREE.Mesh(new THREE.RingGeometry(0.82, 1.0, 48), this.pulseWaveMat);
     this.pulseWave.rotation.x = -Math.PI / 2;
     this.pulseWave.position.y = 0.14;
     this.pulseWave.visible = false;
     this.scene.add(this.pulseWave);
 
-    // --- Build Chim Giấy Đèn Lồng (Origami Lantern Bird) ---
+    // --- Chim Giấy Đèn Lồng ---
     const paperMat = new THREE.MeshStandardMaterial({
-      color: '#fff9e6',
-      emissive: '#ffbf5e',
+      color: '#F5F1E6',
+      emissive: '#FFB347',
       emissiveIntensity: 0.55,
       roughness: 0.45,
       side: THREE.DoubleSide,
@@ -211,26 +212,10 @@ export class EntityVisuals {
     birdBody.rotation.x = Math.PI / 2;
     this.birdGroup.add(birdBody);
 
-    const beak = new THREE.Mesh(
-      new THREE.ConeGeometry(0.05, 0.16, 4),
-      new THREE.MeshStandardMaterial({ color: '#ff9f43', emissive: '#ff9f43', emissiveIntensity: 0.4 })
-    );
-    beak.rotation.x = Math.PI / 2;
-    beak.position.z = 0.34;
-    this.birdGroup.add(beak);
-
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.26, 3), paperMat);
-    tail.rotation.x = -Math.PI / 3;
-    tail.position.set(0, 0.1, -0.32);
-    this.birdGroup.add(tail);
-
     const wingGeo = new THREE.BufferGeometry();
     wingGeo.setAttribute(
       'position',
-      new THREE.BufferAttribute(
-        new Float32Array([0, 0, 0.16, 0.48, 0.08, -0.02, 0, 0, -0.2]),
-        3
-      )
+      new THREE.BufferAttribute(new Float32Array([0, 0, 0.16, 0.48, 0.08, -0.02, 0, 0, -0.2]), 3)
     );
     wingGeo.computeVertexNormals();
     this.leftWing.geometry = wingGeo;
@@ -240,10 +225,7 @@ export class EntityVisuals {
     const rightWingGeo = new THREE.BufferGeometry();
     rightWingGeo.setAttribute(
       'position',
-      new THREE.BufferAttribute(
-        new Float32Array([0, 0, 0.16, -0.48, 0.08, -0.02, 0, 0, -0.2]),
-        3
-      )
+      new THREE.BufferAttribute(new Float32Array([0, 0, 0.16, -0.48, 0.08, -0.02, 0, 0, -0.2]), 3)
     );
     rightWingGeo.computeVertexNormals();
     this.rightWing.geometry = rightWingGeo;
@@ -252,7 +234,7 @@ export class EntityVisuals {
 
     this.birdGlowMat = new THREE.SpriteMaterial({
       map: this.glowTex,
-      color: '#ffd166',
+      color: '#FFE58A',
       transparent: true,
       opacity: 0.72,
       blending: THREE.AdditiveBlending,
@@ -261,13 +243,10 @@ export class EntityVisuals {
     const birdGlow = new THREE.Sprite(this.birdGlowMat);
     birdGlow.scale.set(1.6, 1.6, 1);
     this.birdGroup.add(birdGlow);
-
-    const birdLight = new THREE.PointLight('#ffd166', 2.8, 10, 1.1);
-    this.birdGroup.add(birdLight);
     this.scene.add(this.birdGroup);
 
     const trailMat = new THREE.MeshBasicMaterial({
-      color: '#ffe58f',
+      color: '#FFE58A',
       transparent: true,
       opacity: 0.8,
     });
@@ -278,7 +257,7 @@ export class EntityVisuals {
       this.scene.add(dot);
     }
 
-    // --- Build Bé Lạc (Wandering Girl) ---
+    // --- Bé Lạc ---
     const girlCloak = new THREE.Mesh(
       new THREE.ConeGeometry(0.38, 0.96, 12),
       new THREE.MeshStandardMaterial({ color: '#f08a7e', roughness: 0.65 })
@@ -292,20 +271,12 @@ export class EntityVisuals {
       new THREE.MeshStandardMaterial({ color: '#fde4cf', roughness: 0.6 })
     );
     girlHead.position.y = 1.06;
-    girlHead.castShadow = true;
     this.girlGroup.add(girlHead);
-
-    const girlRibbon = new THREE.Mesh(
-      new THREE.SphereGeometry(0.12, 8, 8),
-      new THREE.MeshBasicMaterial({ color: '#ffe58f' })
-    );
-    girlRibbon.position.set(0, 1.28, 0);
-    this.girlGroup.add(girlRibbon);
 
     const girlGlow = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: this.glowTex,
-        color: '#ffc670',
+        color: '#FFB347',
         transparent: true,
         opacity: 0.78,
         blending: THREE.AdditiveBlending,
@@ -316,28 +287,10 @@ export class EntityVisuals {
     girlGlow.position.y = 1.1;
     this.girlGroup.add(girlGlow);
 
-    const girlPetalRing = new THREE.Mesh(
-      new THREE.RingGeometry(0.65, 0.85, 24),
-      new THREE.MeshBasicMaterial({
-        color: '#ffb8a8',
-        transparent: true,
-        opacity: 0.5,
-        side: THREE.DoubleSide,
-      })
-    );
-    girlPetalRing.rotation.x = -Math.PI / 2;
-    girlPetalRing.position.y = 0.05;
-    this.girlGroup.add(girlPetalRing);
-
-    const girlBeacon = new THREE.PointLight('#ffc078', 5.2, 14, 1.1);
-    girlBeacon.position.set(0, 1.4, 0);
-    this.girlGroup.add(girlBeacon);
-
     this.girlCelebration = new THREE.Group();
-    const sparkleMat = new THREE.MeshBasicMaterial({ color: '#ffd166' });
+    const sparkleMat = new THREE.MeshBasicMaterial({ color: '#F2C14E' });
     for (let i = 0; i < 8; i++) {
-      const sp = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), sparkleMat);
-      this.girlCelebration.add(sp);
+      this.girlCelebration.add(new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), sparkleMat));
     }
     this.girlCelebration.visible = false;
     this.girlGroup.add(this.girlCelebration);
@@ -347,9 +300,9 @@ export class EntityVisuals {
   triggerPulseEffect(playerPos: Vec3, empowered: boolean): void {
     this.pulseWaveTimer = 0.55;
     this.pulseWaveMaxRadius = TUNING.pulse_radius * (empowered ? 1.4 : 1.0);
-    this.pulseWave.position.set(playerPos[0], 0.14, playerPos[2]);
+    this.pulseWave.position.set(playerPos[0], playerPos[1] + 0.14, playerPos[2]);
     this.pulseWave.visible = true;
-    this.pulseWaveMat.color.set(empowered ? '#ff857a' : '#ffd166');
+    this.pulseWaveMat.color.set(empowered ? '#FF5A5F' : '#F2C14E');
   }
 
   triggerManualBirdGuide(): void {
@@ -361,18 +314,20 @@ export class EntityVisuals {
     lanterns: LanternState[],
     motes: MoteState[],
     shades: ShadeState[],
+    drifters: DrifterState[],
+    charms: CharmState[],
     girl: WanderingGirlState,
     buffs: CreativeBuffs,
     timeS: number,
     dt: number
   ): void {
     // 1. Player Mây
+    this.playerGroup.visible = player.respawnWaitTicks === 0;
     this.playerGroup.position.set(player.pos[0], player.pos[1], player.pos[2]);
 
     const vx = player.pos[0] - this.prevPlayerPos[0];
     const vz = player.pos[2] - this.prevPlayerPos[2];
-    const moveMag = Math.hypot(vx, vz);
-    if (moveMag > 0.004) {
+    if (Math.hypot(vx, vz) > 0.004) {
       const targetRot = Math.atan2(vx, vz);
       let diff = targetRot - this.playerBody.rotation.y;
       while (diff > Math.PI) diff -= Math.PI * 2;
@@ -385,15 +340,12 @@ export class EntityVisuals {
     this.prevPlayerPos = [player.pos[0], player.pos[1], player.pos[2]];
 
     this.playerBody.visible =
-      player.invulnTimer <= 0 || Math.floor(player.invulnTimer * 16) % 2 === 0;
+      player.invulnTicks <= 0 || Math.floor(player.invulnTicks / 4) % 2 === 0;
 
-    // Hat lantern brightness scales with carried light
-    this.hatLanternLight.intensity = 6.0 + player.carried * 1.4;
-    const hatScale = 0.9 + Math.min(1, player.carried / TUNING.carry_capacity) * 0.6;
-    this.hatLanternCore.scale.setScalar(hatScale);
-    this.hatLanternGlow.scale.setScalar(1.15 + player.carried * 0.16);
+    this.dashRing.visible = player.dashTicksLeft > 0;
+    this.hatLanternLight.intensity = 6.0 + player.carried * 1.2;
+    this.hatLanternGlow.scale.setScalar(1.15 + player.carried * 0.14);
 
-    // Orbiting fireflies around Mây
     for (let i = 0; i < this.orbitingFireflies.length; i++) {
       const orb = this.orbitingFireflies[i];
       if (i < player.carried) {
@@ -409,9 +361,12 @@ export class EntityVisuals {
       }
     }
 
-    if (buffs.powerTimer > 0) {
+    if (player.charmTicks > 0) {
       this.buffRing.visible = true;
-      this.buffRingMat.color.set('#ff5a5f');
+      this.buffRingMat.color.set('#C8102E');
+    } else if (buffs.powerTimer > 0) {
+      this.buffRing.visible = true;
+      this.buffRingMat.color.set('#FF5A5F');
     } else if (buffs.speedTimer > 0) {
       this.buffRing.visible = true;
       this.buffRingMat.color.set('#38bdf8');
@@ -422,12 +377,9 @@ export class EntityVisuals {
     if (this.pulseWaveTimer > 0) {
       this.pulseWaveTimer = Math.max(0, this.pulseWaveTimer - dt);
       const t = 1 - this.pulseWaveTimer / 0.55;
-      const r = 0.8 + t * this.pulseWaveMaxRadius;
-      this.pulseWave.scale.setScalar(r);
+      this.pulseWave.scale.setScalar(0.8 + t * this.pulseWaveMaxRadius);
       this.pulseWaveMat.opacity = (1 - t) * 0.85;
-      if (this.pulseWaveTimer === 0) {
-        this.pulseWave.visible = false;
-      }
+      if (this.pulseWaveTimer === 0) this.pulseWave.visible = false;
     }
 
     // 2. Chim Giấy Đèn Lồng
@@ -459,7 +411,7 @@ export class EntityVisuals {
       this.girlGroup.visible = false;
     }
 
-    // 4. Motes pool
+    // 4. Motes
     const activeMoteIds = new Set(motes.map((m) => m.id));
     for (const [id, mesh] of this.moteMeshes) {
       if (!activeMoteIds.has(id)) {
@@ -470,21 +422,19 @@ export class EntityVisuals {
     motes.forEach((mote, index) => {
       let group = this.moteMeshes.get(mote.id);
       if (!group) {
-        group = this.createMoteMesh(mote.color);
+        group = this.createMoteMesh(mote.color, mote.kind === 'dropped');
         this.moteMeshes.set(mote.id, group);
         this.scene.add(group);
       }
       group.position.set(
         mote.pos[0],
-        0.85 + Math.sin(timeS * 3.1 + index) * 0.22,
+        mote.pos[1] + 0.8 + Math.sin(timeS * 3.1 + index) * 0.2,
         mote.pos[2]
       );
       group.rotation.y = timeS * 1.6 + index;
-      const wings = group.userData.wings as THREE.Group;
-      wings.rotation.z = Math.sin(timeS * 18 + index) * 0.35;
     });
 
-    // 5. Shades pool
+    // 5. Shades (Standard palette: #120A1A body, #7A3CFF rim, #3A3450 stunned)
     const activeShadeIds = new Set(shades.map((s) => s.id));
     for (const [id, mesh] of this.shadeMeshes) {
       if (!activeShadeIds.has(id)) {
@@ -499,40 +449,77 @@ export class EntityVisuals {
         this.shadeMeshes.set(shade.id, group);
         this.scene.add(group);
       }
-      const hoverY = Math.sin(timeS * 3.5 + index) * 0.14;
-      group.position.set(shade.pos[0], hoverY, shade.pos[2]);
+      group.position.set(shade.pos[0], shade.pos[1] + Math.sin(timeS * 3.5 + index) * 0.14, shade.pos[2]);
 
       const bodyMat = group.userData.bodyMat as THREE.MeshStandardMaterial;
       const stunRing = group.userData.stunRing as THREE.Group;
-      const wisps = group.userData.wisps as THREE.Group;
-      wisps.rotation.y = timeS * 2.2 + index;
 
       if (shade.state === 'stunned') {
-        bodyMat.color.set('#8971b8');
-        bodyMat.emissive.set('#d8b4fe');
-        bodyMat.emissiveIntensity = 0.8;
+        bodyMat.color.set('#3A3450');
+        bodyMat.emissive.set('#7A3CFF');
+        bodyMat.emissiveIntensity = 0.65;
         group.rotation.y = timeS * 8;
         stunRing.visible = true;
         stunRing.rotation.y = -timeS * 5;
-      } else if (shade.state === 'flee') {
-        bodyMat.color.set('#381e5c');
-        bodyMat.emissive.set('#a855f7');
-        bodyMat.emissiveIntensity = 0.55;
-        group.rotation.y = Math.atan2(
-          shade.pos[0] - player.pos[0],
-          shade.pos[2] - player.pos[2]
-        );
-        stunRing.visible = false;
       } else {
-        bodyMat.color.set('#1f0e33');
-        bodyMat.emissive.set('#6b21a8');
-        bodyMat.emissiveIntensity = 0.45;
+        bodyMat.color.set('#120A1A');
+        bodyMat.emissive.set('#7A3CFF');
+        bodyMat.emissiveIntensity = shade.state === 'chase' ? 0.55 : 0.35;
         group.rotation.y = Math.atan2(
           player.pos[0] - shade.pos[0],
           player.pos[2] - shade.pos[2]
         );
         stunRing.visible = false;
       }
+    });
+
+    // 6. Drifters (Gió Lạc #8FA3B8)
+    const activeDrifterIds = new Set(drifters.map((d) => d.id));
+    for (const [id, mesh] of this.drifterMeshes) {
+      if (!activeDrifterIds.has(id)) {
+        this.scene.remove(mesh);
+        this.drifterMeshes.delete(id);
+      }
+    }
+    drifters.forEach((drifter, index) => {
+      let group = this.drifterMeshes.get(drifter.id);
+      if (!group) {
+        group = this.createDrifterMesh();
+        this.drifterMeshes.set(drifter.id, group);
+        this.scene.add(group);
+      }
+      group.position.set(
+        drifter.pos[0],
+        drifter.pos[1] + 1.2 + Math.sin(timeS * 4 + index) * 0.25,
+        drifter.pos[2]
+      );
+      group.rotation.y = timeS * 2.5 + index;
+      const bag = group.userData.stolenOrb as THREE.Mesh;
+      bag.visible = drifter.stolen > 0;
+    });
+
+    // 7. Wind Charms (#C8102E with #F2C14E trim)
+    const activeCharmIds = new Set(charms.map((c) => c.id));
+    for (const [id, mesh] of this.charmMeshes) {
+      if (!activeCharmIds.has(id)) {
+        this.scene.remove(mesh);
+        this.charmMeshes.delete(id);
+      }
+    }
+    charms.forEach((charm, index) => {
+      let group = this.charmMeshes.get(charm.id);
+      if (!group) {
+        group = this.createCharmMesh();
+        this.charmMeshes.set(charm.id, group);
+        this.scene.add(group);
+      }
+      group.visible = charm.available;
+      group.position.set(
+        charm.pos[0],
+        charm.pos[1] + 1.0 + Math.sin(timeS * 2.6 + index) * 0.18,
+        charm.pos[2]
+      );
+      group.rotation.y = timeS * 1.8;
     });
   }
 
@@ -583,10 +570,10 @@ export class EntityVisuals {
       const lead = Math.min(len, 4.8);
       desiredPos = new THREE.Vector3(
         player.pos[0] + (dx / len) * lead,
-        2.35 + Math.sin(timeS * 4.5) * 0.25,
+        player.pos[1] + 2.35 + Math.sin(timeS * 4.5) * 0.25,
         player.pos[2] + (dz / len) * lead
       );
-      lookPos = new THREE.Vector3(targetLantern.pos[0], 2.5, targetLantern.pos[2]);
+      lookPos = new THREE.Vector3(targetLantern.pos[0], targetLantern.pos[1] + 2.5, targetLantern.pos[2]);
 
       this.birdTrail.forEach((dot, idx) => {
         dot.visible = true;
@@ -594,7 +581,7 @@ export class EntityVisuals {
         const span = Math.min(len, 9.0);
         dot.position.set(
           player.pos[0] + (dx / len) * span * frac,
-          1.45 + Math.sin(timeS * 5 + idx) * 0.15,
+          player.pos[1] + 1.45 + Math.sin(timeS * 5 + idx) * 0.15,
           player.pos[2] + (dz / len) * span * frac
         );
       });
@@ -602,7 +589,7 @@ export class EntityVisuals {
       const orbitA = timeS * 1.45;
       desiredPos = new THREE.Vector3(
         player.pos[0] + Math.cos(orbitA) * 1.5,
-        2.15 + Math.sin(timeS * 3.5) * 0.2,
+        player.pos[1] + 2.15 + Math.sin(timeS * 3.5) * 0.2,
         player.pos[2] + Math.sin(orbitA) * 1.5
       );
       lookPos = new THREE.Vector3(
@@ -622,25 +609,25 @@ export class EntityVisuals {
     const flap = Math.sin(timeS * (dangerClose ? 18 : 10)) * 0.55;
     this.leftWing.rotation.z = flap;
     this.rightWing.rotation.z = -flap;
-    this.birdCoreMat.emissive.set(dangerClose ? '#e879f9' : '#ffbf5e');
-    this.birdCoreMat.emissiveIntensity = dangerClose ? 1.05 : 0.55;
-    this.birdGlowMat.color.set(dangerClose ? '#e879f9' : '#ffd166');
+    this.birdCoreMat.emissive.set(dangerClose ? '#7A3CFF' : '#FFB347');
+    this.birdGlowMat.color.set(dangerClose ? '#7A3CFF' : '#FFE58A');
   }
 
-  private createMoteMesh(color: MoteColor): THREE.Group {
+  private createMoteMesh(color: MoteColor, isDropped: boolean): THREE.Group {
     const group = new THREE.Group();
-    const hex = MOTE_COLORS[color];
+    const hex = CREATIVE_MOTE_COLORS[color];
 
-    const core = new THREE.Mesh(
-      new THREE.SphereGeometry(0.22, 10, 10),
-      new THREE.MeshBasicMaterial({ color: hex })
+    group.add(
+      new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 10, 10),
+        new THREE.MeshBasicMaterial({ color: hex })
+      )
     );
-    group.add(core);
 
     const glow = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: this.glowTex,
-        color: hex,
+        color: color === 'gold' ? '#FFE58A' : hex,
         transparent: true,
         opacity: 0.9,
         blending: THREE.AdditiveBlending,
@@ -650,96 +637,56 @@ export class EntityVisuals {
     glow.scale.set(1.5, 1.5, 1);
     group.add(glow);
 
-    // Fluttering fairy firefly wings
-    const wings = new THREE.Group();
-    const wingMat = new THREE.MeshBasicMaterial({
-      color: '#ffffff',
-      transparent: true,
-      opacity: 0.55,
-      side: THREE.DoubleSide,
-    });
-    for (const side of [-1, 1]) {
-      const wing = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.14), wingMat);
-      wing.position.set(side * 0.18, 0.06, 0);
-      wing.rotation.x = Math.PI / 2;
-      wing.rotation.z = side * 0.35;
-      wings.add(wing);
+    if (isDropped) {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.32, 0.44, 18),
+        new THREE.MeshBasicMaterial({
+          color: '#F2C14E',
+          transparent: true,
+          opacity: 0.75,
+          side: THREE.DoubleSide,
+        })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = -0.6;
+      group.add(ring);
     }
-    group.add(wings);
-    group.userData.wings = wings;
-
-    const halo = new THREE.Mesh(
-      new THREE.RingGeometry(0.32, 0.4, 18),
-      new THREE.MeshBasicMaterial({
-        color: hex,
-        transparent: true,
-        opacity: 0.65,
-        side: THREE.DoubleSide,
-      })
-    );
-    halo.rotation.x = -Math.PI / 2;
-    halo.position.y = -0.6;
-    group.add(halo);
     return group;
   }
 
   private createShadeMesh(isLarge: boolean): THREE.Group {
     const group = new THREE.Group();
-    const scale = isLarge ? 1.45 : 0.9;
+    const scale = isLarge ? 1.45 : 0.92;
 
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: '#1f0e33',
-      emissive: '#6b21a8',
-      emissiveIntensity: 0.45,
-      roughness: 0.52,
+      color: '#120A1A',
+      emissive: '#7A3CFF',
+      emissiveIntensity: 0.4,
+      roughness: 0.55,
     });
 
-    const torso = new THREE.Mesh(
-      new THREE.ConeGeometry(0.52 * scale, 1.5 * scale, 12),
-      bodyMat
-    );
-    torso.position.y = 0.88 * scale;
+    const torso = new THREE.Mesh(new THREE.ConeGeometry(0.5 * scale, 1.48 * scale, 12), bodyMat);
+    torso.position.y = 0.85 * scale;
     torso.castShadow = true;
     group.add(torso);
 
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.34 * scale, 12, 10),
-      bodyMat
-    );
-    head.position.y = 1.52 * scale;
-    head.castShadow = true;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.32 * scale, 12, 10), bodyMat);
+    head.position.y = 1.48 * scale;
     group.add(head);
 
-    const eyeMat = new THREE.MeshBasicMaterial({
-      color: isLarge ? '#fb7185' : '#e879f9',
-    });
-    for (const side of [-0.12, 0.12]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.065 * scale, 6, 6), eyeMat);
-      eye.position.set(side * scale, 1.54 * scale, 0.28 * scale);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: '#7A3CFF' });
+    for (const side of [-0.11, 0.11]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06 * scale, 6, 6), eyeMat);
+      eye.position.set(side * scale, 1.5 * scale, 0.27 * scale);
       group.add(eye);
     }
 
-    // Floating ink tendrils around base
-    const wisps = new THREE.Group();
-    for (let i = 0; i < 4; i++) {
-      const wisp = new THREE.Mesh(
-        new THREE.SphereGeometry(0.14 * scale, 6, 6),
-        bodyMat
-      );
-      const a = (i * Math.PI * 2) / 4;
-      wisp.position.set(Math.cos(a) * 0.48 * scale, 0.32 * scale, Math.sin(a) * 0.48 * scale);
-      wisps.add(wisp);
-    }
-    group.add(wisps);
-    group.userData.wisps = wisps;
-
-    // Ground danger aura ring
     const auraRing = new THREE.Mesh(
-      new THREE.RingGeometry(0.68 * scale, 0.92 * scale, 24),
+      new THREE.RingGeometry(0.66 * scale, 0.88 * scale, 22),
       new THREE.MeshBasicMaterial({
-        color: isLarge ? '#a855f7' : '#9333ea',
+        color: '#7A3CFF',
         transparent: true,
-        opacity: isLarge ? 0.45 : 0.3,
+        opacity: 0.42,
         side: THREE.DoubleSide,
       })
     );
@@ -749,20 +696,20 @@ export class EntityVisuals {
 
     if (isLarge) {
       for (const side of [-1, 1]) {
-        const horn = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.52, 6), bodyMat);
-        horn.position.set(side * 0.28, 2.48, 0);
+        const horn = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.5, 6), bodyMat);
+        horn.position.set(side * 0.28, 2.45, 0);
         horn.rotation.z = -side * 0.35;
         group.add(horn);
       }
     }
 
     const stunRing = new THREE.Group();
-    stunRing.position.y = 2.05 * scale;
-    const starMat = new THREE.MeshBasicMaterial({ color: '#fde047' });
+    stunRing.position.y = 2.0 * scale;
+    const starMat = new THREE.MeshBasicMaterial({ color: '#F2C14E' });
     for (let i = 0; i < 4; i++) {
       const star = new THREE.Mesh(new THREE.SphereGeometry(0.065, 6, 6), starMat);
       const a = (i * Math.PI * 2) / 4;
-      star.position.set(Math.cos(a) * 0.48 * scale, 0, Math.sin(a) * 0.48 * scale);
+      star.position.set(Math.cos(a) * 0.46 * scale, 0, Math.sin(a) * 0.46 * scale);
       stunRing.add(star);
     }
     stunRing.visible = false;
@@ -773,11 +720,71 @@ export class EntityVisuals {
     return group;
   }
 
+  private createDrifterMesh(): THREE.Group {
+    const group = new THREE.Group();
+    const silkMat = new THREE.MeshStandardMaterial({
+      color: '#8FA3B8',
+      emissive: '#8FA3B8',
+      emissiveIntensity: 0.35,
+      side: THREE.DoubleSide,
+      roughness: 0.4,
+    });
+    const ribbon = new THREE.Mesh(new THREE.TorusKnotGeometry(0.36, 0.08, 32, 8, 2, 3), silkMat);
+    group.add(ribbon);
+
+    const stolenOrb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 8, 8),
+      new THREE.MeshBasicMaterial({ color: '#FFE58A' })
+    );
+    stolenOrb.position.y = 0.55;
+    stolenOrb.visible = false;
+    group.add(stolenOrb);
+    group.userData.stolenOrb = stolenOrb;
+    return group;
+  }
+
+  private createCharmMesh(): THREE.Group {
+    const group = new THREE.Group();
+    const talisman = new THREE.Mesh(
+      new THREE.BoxGeometry(0.42, 0.72, 0.08),
+      new THREE.MeshStandardMaterial({
+        color: '#C8102E',
+        emissive: '#C8102E',
+        emissiveIntensity: 0.35,
+      })
+    );
+    group.add(talisman);
+
+    const border = new THREE.Mesh(
+      new THREE.BoxGeometry(0.48, 0.78, 0.04),
+      new THREE.MeshBasicMaterial({ color: '#F2C14E' })
+    );
+    group.add(border);
+
+    const glow = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: this.glowTex,
+        color: '#F2C14E',
+        transparent: true,
+        opacity: 0.75,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    glow.scale.set(1.8, 1.8, 1);
+    group.add(glow);
+    return group;
+  }
+
   reset(): void {
-    for (const mesh of this.moteMeshes.values()) this.scene.remove(mesh);
+    for (const m of this.moteMeshes.values()) this.scene.remove(m);
     this.moteMeshes.clear();
-    for (const mesh of this.shadeMeshes.values()) this.scene.remove(mesh);
+    for (const s of this.shadeMeshes.values()) this.scene.remove(s);
     this.shadeMeshes.clear();
+    for (const d of this.drifterMeshes.values()) this.scene.remove(d);
+    this.drifterMeshes.clear();
+    for (const c of this.charmMeshes.values()) this.scene.remove(c);
+    this.charmMeshes.clear();
     this.prevPlayerPos = [0, 0, 0];
     this.idleSinceProgressS = 0;
     this.prevBestLanternProgress = 0;
