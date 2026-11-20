@@ -54,5 +54,6 @@
   - Smoke test Đêm 3 phát hiện `game.contract.json` chưa được ghi đè ở lượt chỉnh sửa bị gián đoạn (`time_left_s: null`) -> ghi lại và kiểm chứng ngay trên CLI.
   - 3 assertion đầu tiên ở `tests/contract.test.ts` (Bóng Mực ở `7m` tự chuyển từ `wander` sang `chase` trong cùng tick do `<= 12m`; người chơi giữ `move` lúc hồi sinh; `pulse` trừ `3` trước khi nhặt lại `3` đom đóm rơi) được đối chiếu từng tick để xác nhận logic chính xác 100%.
 - **Hiệu năng & Token Phase 2:**
-  - Headless 21.600 tick Đêm 3 hoàn thành trong **~0.27s** (ngưỡng yêu cầu `≤ 30s`).
+  - Headless 21.600 tick Đêm 3 hoàn thành trong **~0.48s** (`479 ms`, ngưỡng yêu cầu `≤ 30s`).
+  - Đo thực tế bản 3D trên trình duyệt của người dùng (`http://localhost:4173/`): **54 FPS** (đạt ngưỡng `≥ 30 FPS`).
   - Ước tính token Phase 2: ~75.000–95.000 tokens (giữ gọn bằng cách tái sử dụng toàn bộ kiến trúc `src/sim/` và chỉ mở rộng thêm `maps.ts` + cập nhật có chọn lọc).
