@@ -89,15 +89,17 @@ describe('Contract v1.1 movement transform & input rising edges', () => {
   });
 });
 
-describe('game.contract.json v1.1 single source of truth', () => {
-  it('exposes exact v1.1 schema and matching tuning constants', () => {
+describe('game.contract.json v1.2 single source of truth', () => {
+  it('exposes exact v1.2 schema and matching tuning constants', () => {
     const raw = JSON.parse(
       readFileSync(path.resolve(__dirname, '../../game.contract.json'), 'utf8')
     );
-    expect(raw.contract_version).toBe('1.1');
+    expect(raw.contract_version).toBe('1.2');
     expect(raw.tuning).toEqual(TUNING);
     expect(CONTRACT.tuning.carry_capacity).toBe(10);
-    expect(CONTRACT.tuning.lantern_cost).toBe(10);
+    expect(CONTRACT.tuning.capacity_max).toBe(20);
+    expect(CONTRACT.tuning.relight_cost).toBe(5);
+    expect(CONTRACT.tuning.fuel_max).toBe(100);
     expect(CONTRACT.tuning.dash_speed).toBe(14.0);
   });
 });

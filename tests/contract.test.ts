@@ -70,35 +70,37 @@ describe('Headless CLI — Test Contract v1.1 (Regression + Phase 2)', () => {
     });
   });
 
-  it('02: deposits carried light (+10/mote), lights final lantern (+100), and wins', () => {
+  it('02: deposits carried light (+5/mote), lights final lantern (+100, relight=false), increases capacity, continues playing (no early win per TICKET-03)', () => {
     const out = path.join(workDir, '02.jsonl');
     const res = runCli([
       '--seed', '2',
       '--night', '1',
       '--scenario', path.join(SCENARIO_DIR, '02-deposit-win.scenario.json'),
       '--inputs', path.join(SCENARIO_DIR, '02-deposit-win.inputs.json'),
-      '--ticks', '100',
+      '--ticks', '10',
+      '--snapshot-every', '1',
       '--out', out,
     ]);
     expect(res.status).toBe(0);
 
     const records = parseJsonl(out);
     expect(records[0].score).toBe(0);
+    expect(records[0].player.capacity).toBe(10);
 
     const events = records.filter((r) => r.type === 'event' && r.name !== 'night_start');
-    expect(events.map((e) => e.name)).toEqual(['deposit', 'lantern_lit', 'game_over']);
+    expect(events.map((e) => e.name)).toEqual(['deposit', 'lantern_lit']);
     expect(events[0].data).toEqual({ lantern_id: 'L1', amount: 10, deposited: 10 });
-    expect(events[2].data).toEqual({ result: 'won', reason: 'all_lit' });
+    expect(events[1].data).toEqual({ lantern_id: 'L1', relight: false });
 
-    const expectedScore =
-      10 * TUNING.score.per_mote +
-      TUNING.score.per_lantern +
-      99 * TUNING.score.per_second_left +
-      3 * TUNING.score.per_flame_left;
+    const snap1 = records.find((r) => r.type === 'snapshot' && r.tick === 1)!;
+    expect(snap1.player.capacity).toBe(12);
+    expect(snap1.lanterns[0].fuel).toBeGreaterThan(99);
+
+    const expectedScore = 10 * TUNING.score.per_mote + TUNING.score.per_lantern; // 50 + 100 = 150
     expect(records[records.length - 1]).toEqual({
       type: 'end',
-      ticks: 1,
-      state: 'won',
+      ticks: 10,
+      state: 'playing',
       score: expectedScore,
     });
   });
@@ -208,15 +210,21 @@ describe('Headless CLI — Test Contract v1.1 (Regression + Phase 2)', () => {
     expect(res.status).toBe(0);
 
     const records = parseJsonl(out);
-    const validShadeStates = new Set(['spawning', 'wander', 'chase', 'recoil', 'stunned']);
+    const validShadeStates = new Set(['spawning', 'wander', 'chase', 'recoil', 'stunned', 'drain']);
     for (const rec of records) {
       if (rec.type === 'snapshot') {
         expect(rec.night).toBe(1);
         expect(rec.wind).toEqual({ active: false, dir_deg: 0 });
         expect(typeof rec.player.grounded).toBe('boolean');
+        expect(typeof rec.player.capacity).toBe('number');
         expect(Array.isArray(rec.player.vel)).toBe(true);
         expect(Array.isArray(rec.drifters)).toBe(true);
         expect(Array.isArray(rec.charms)).toBe(true);
+        for (const l of rec.lanterns) {
+          expect(typeof l.fuel).toBe('number');
+          expect(typeof l.ever_lit).toBe('boolean');
+          expect(typeof l.relit_count).toBe('number');
+        }
         expect(countDecimals(rec.time_left_s)).toBeLessThanOrEqual(3);
         for (const s of rec.shades) {
           expect(validShadeStates.has(s.state)).toBe(true);
@@ -547,5 +555,211 @@ describe('Headless CLI — Test Contract v1.1 (Regression + Phase 2)', () => {
     const h3a = createHash('sha256').update(readFileSync(out3a)).digest('hex');
     const h3b = createHash('sha256').update(readFileSync(out3b)).digest('hex');
     expect(h3a).toBe(h3b);
+  });
+
+  it('16: lantern fuel decays to 0 (lantern_out), relight costs 5 (+40), refuel tops up and ignores full lanterns', () => {
+    const scenPath = path.join(workDir, '16-fuel-scen.json');
+    const inPath = path.join(workDir, '16-fuel-in.json');
+    const out = path.join(workDir, '16-fuel.jsonl');
+
+    writeFileSync(
+      scenPath,
+      JSON.stringify({
+        player: { pos: [0, 0, 1.0], carried: 10, flames: 3 },
+        random_motes: false,
+        random_shades: false,
+        motes: [],
+        shades: [],
+        lanterns: [
+          { id: 'L1', pos: [0, 0, 1.5], lit: true, fuel: 1.0 },
+          { id: 'L2', pos: [0, 0, -5.0], lit: true, fuel: 85.0 },
+        ],
+        time_left_s: 240,
+      }),
+      'utf8'
+    );
+    writeFileSync(
+      inPath,
+      JSON.stringify({
+        frames: [
+          { tick: 65, interact: true },
+          { tick: 66, interact: false },
+          { tick: 70, move: [0, -1] },
+          { tick: 120, move: [0, 0], interact: true },
+          { tick: 121, interact: false },
+          { tick: 125, interact: true },
+          { tick: 126, interact: false },
+        ],
+      }),
+      'utf8'
+    );
+
+    const res = runCli([
+      '--seed', '16', '--night', '1', '--scenario', scenPath, '--inputs', inPath, '--ticks', '135', '--snapshot-every', '10', '--out', out,
+    ]);
+    expect(res.status).toBe(0);
+
+    const records = parseJsonl(out);
+    const outEv = records.find((r) => r.type === 'event' && r.name === 'lantern_out')!;
+    expect(outEv.tick).toBe(60);
+    expect(outEv.data).toEqual({ lantern_id: 'L1' });
+
+    const relitEv = records.find((r) => r.type === 'event' && r.name === 'lantern_lit')!;
+    expect(relitEv.tick).toBe(66);
+    expect(relitEv.data).toEqual({ lantern_id: 'L1', relight: true });
+
+    const refuelEvents = records.filter((r) => r.type === 'event' && r.name === 'refuel');
+    expect(refuelEvents).toHaveLength(2);
+    expect(refuelEvents[0].data).toEqual({ lantern_id: 'L2', amount: 2, fuel: 100 });
+    // After 5 ticks of 1/60 decay (fuel=99.917 < 100), another interact uses 1 mote to top up to 100
+    expect(refuelEvents[1].data).toEqual({ lantern_id: 'L2', amount: 1, fuel: 100 });
+
+    const snap70 = records.find((r) => r.type === 'snapshot' && r.tick === 70)!;
+    expect(snap70.lanterns[0].ever_lit).toBe(true);
+    expect(snap70.lanterns[0].relit_count).toBe(1);
+    expect(snap70.player.capacity).toBe(12);
+  });
+
+  it('17: shade drains weak lantern (<30 fuel), emits fuel_drain every 60t, awards +15 on pulse, and is pushed out on refuel >= 30', () => {
+    const scenPath = path.join(workDir, '17-drain-scen.json');
+    const inPath = path.join(workDir, '17-drain-in.json');
+    const out = path.join(workDir, '17-drain.jsonl');
+
+    // Player far away at (0,0,-20) initially, S1 wanders to weak L1 (0,0,25) with fuel 25
+    writeFileSync(
+      scenPath,
+      JSON.stringify({
+        player: { pos: [0, 0, 24.5], carried: 6, flames: 3 },
+        random_motes: false,
+        random_shades: false,
+        motes: [],
+        shades: [{ id: 'S1', pos: [0, 0, 26.5], state: 'drain', target_lantern_id: 'L1' }],
+        lanterns: [{ id: 'L1', pos: [0, 0, 25], lit: true, fuel: 25 }],
+        time_left_s: 240,
+      }),
+      'utf8'
+    );
+    // Refuel L1 at tick 70 (adds 1 mote -> +10 fuel -> crosses 30 -> pushes S1 out)
+    // Wait: player is within 2m of S1; in drain state, S1 only transitions to chase if player <= 6m during Step 8.
+    // Let's test drain for 65 ticks with player at (0,0,0), then run pulse test separately!
+    writeFileSync(
+      scenPath,
+      JSON.stringify({
+        player: { pos: [0, 0, 0], carried: 3, flames: 3 },
+        random_motes: false,
+        random_shades: false,
+        motes: [],
+        shades: [{ id: 'S1', pos: [0, 0, 26.0], state: 'drain', target_lantern_id: 'L1' }],
+        lanterns: [{ id: 'L1', pos: [0, 0, 25], lit: true, fuel: 25 }],
+        time_left_s: 240,
+      }),
+      'utf8'
+    );
+    writeFileSync(inPath, JSON.stringify({ frames: [] }), 'utf8');
+
+    const res = runCli([
+      '--seed', '17', '--night', '1', '--scenario', scenPath, '--inputs', inPath, '--ticks', '70', '--snapshot-every', '10', '--out', out,
+    ]);
+    expect(res.status).toBe(0);
+    const records = parseJsonl(out);
+    const drainEv = records.find((r) => r.type === 'event' && r.name === 'fuel_drain')!;
+    expect(drainEv.tick).toBe(60);
+    expect(drainEv.data.lantern_id).toBe('L1');
+    expect(drainEv.data.shade_id).toBe('S1');
+    expect(drainEv.data.fuel).toBeCloseTo(19, 1);
+
+    // Part B: Pulse on draining shade awards +15
+    const pulseScen = path.join(workDir, '17b-scen.json');
+    const pulseIn = path.join(workDir, '17b-in.json');
+    const pulseOut = path.join(workDir, '17b.jsonl');
+    writeFileSync(
+      pulseScen,
+      JSON.stringify({
+        player: { pos: [0, 0, 22.0], carried: 3, flames: 3 },
+        random_motes: false,
+        random_shades: false,
+        motes: [],
+        shades: [{ id: 'S1', pos: [0, 0, 25.0], state: 'drain', target_lantern_id: 'L1' }],
+        lanterns: [{ id: 'L1', pos: [0, 0, 25], lit: true, fuel: 25 }],
+        time_left_s: 240,
+      }),
+      'utf8'
+    );
+    writeFileSync(
+      pulseIn,
+      JSON.stringify({ frames: [{ tick: 0, pulse: true }, { tick: 1, pulse: false }] }),
+      'utf8'
+    );
+    const resB = runCli([
+      '--seed', '17', '--night', '1', '--scenario', pulseScen, '--inputs', pulseIn, '--ticks', '5', '--out', pulseOut,
+    ]);
+    expect(resB.status).toBe(0);
+    const recsB = parseJsonl(pulseOut);
+    expect(recsB[recsB.length - 1].score).toBe(15);
+  });
+
+  it('18: dawn win requires >= ceil(0.6*total) lit lanterns (dawn_survived) and awards dawn bonuses', () => {
+    const winScen = path.join(workDir, '18-win-scen.json');
+    const lossScen = path.join(workDir, '18-loss-scen.json');
+    const outWin = path.join(workDir, '18-win.jsonl');
+    const outLoss = path.join(workDir, '18-loss.jsonl');
+
+    writeFileSync(
+      winScen,
+      JSON.stringify({
+        player: { pos: [0, 0, 0], carried: 0, flames: 3 },
+        random_motes: false,
+        random_shades: false,
+        motes: [],
+        shades: [],
+        lanterns: [
+          { id: 'L1', lit: true, fuel: 80 },
+          { id: 'L2', lit: true, fuel: 80 },
+          { id: 'L3', lit: true, fuel: 80 },
+        ],
+        time_left_s: 1,
+      }),
+      'utf8'
+    );
+
+    const resWin = runCli([
+      '--seed', '18', '--night', '1', '--scenario', winScen, '--ticks', '100', '--out', outWin,
+    ]);
+    expect(resWin.status).toBe(0);
+    const winRecs = parseJsonl(outWin);
+    const winOver = winRecs.find((r) => r.type === 'event' && r.name === 'game_over')!;
+    expect(winOver.tick).toBe(60);
+    expect(winOver.data).toEqual({ result: 'won', reason: 'dawn_survived' });
+    // 3 lanterns * (50 + floor(79.0)) + 3 flames * 50 = 3*129 + 150 = 537
+    expect(winRecs[winRecs.length - 1]).toEqual({
+      type: 'end',
+      ticks: 60,
+      state: 'won',
+      score: 537,
+    });
+
+    writeFileSync(
+      lossScen,
+      JSON.stringify({
+        player: { pos: [0, 0, 0], carried: 0, flames: 3 },
+        random_motes: false,
+        random_shades: false,
+        motes: [],
+        shades: [],
+        lanterns: [
+          { id: 'L1', lit: true, fuel: 80 },
+          { id: 'L2', lit: true, fuel: 80 },
+        ],
+        time_left_s: 1,
+      }),
+      'utf8'
+    );
+    const resLoss = runCli([
+      '--seed', '18', '--night', '1', '--scenario', lossScen, '--ticks', '100', '--out', outLoss,
+    ]);
+    expect(resLoss.status).toBe(0);
+    const lossRecs = parseJsonl(outLoss);
+    const lossOver = lossRecs.find((r) => r.type === 'event' && r.name === 'game_over')!;
+    expect(lossOver.data).toEqual({ result: 'lost', reason: 'dawn' });
   });
 });
