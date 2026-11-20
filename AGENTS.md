@@ -1,4 +1,4 @@
-# AGENTS.md — Đảo Đèn Lồng (Phase 2 · Contract v1.1)
+# AGENTS.md — Đảo Đèn Lồng (Phase 3 · Contract v1.2)
 
 ## Commands
 - Install: `npm ci` (or `npm install`)
@@ -12,10 +12,10 @@
 2. **Single source of truth:** All tuning values MUST be imported from `game.contract.json` via `src/sim/config.ts`; standardized Night 1/2/3 map layouts live in `src/sim/maps.ts`.
 3. **Creative isolation:** Creative additions (Bé Lạc wandering girl, Origami Lantern Bird, Large/Small Shades, colored mote buffs) MUST ONLY run when `options.creative === true` (browser UI). Headless CLI MUST always pass `creative: false`.
 4. **Cross-platform:** Keep all filenames lowercase. Use `node:path` and `\n` line endings so Linux/macOS/Windows behave identically.
-5. **Test Contract v1.1 invariants:**
-   - Fixed `1/60s` tick using exact integer tick counters for timers/cooldowns/TTLs (zero IEEE-754 drift).
-   - Follow the exact 12-step tick order (Input/Pause -> Timers -> Player Move/Fall -> Pickups -> Lanterns -> Safe Zones -> Pulse -> Move Shades/Drifters -> Collisions -> Spawns -> Win/Loss -> Snapshot).
-   - Shade states MUST be strictly `spawning | wander | chase | recoil | stunned`.
-   - When `paused`, `tick` advances while `sim_tick`, timers, spawns, and TTLs freeze (`state: "paused"`).
+5. **Test Contract v1.2 invariants:**
+   - Fixed `1/60s` tick using integer `1/60` units for lantern fuel (`fuelUnits` max `6000`) and integer tick counters for all timers/cooldowns/TTLs (zero IEEE-754 drift).
+   - Follow the exact 12-step tick order (with fuel decay + drain in step 2, auto-extinguish `fuel <= 0` right after step 2).
+   - Shade states MUST be strictly `spawning | wander | chase | recoil | stunned | drain`.
+   - Win only at dawn (`dawn_survived`) with `lit >= ceil(0.6 * total)`; `flames <= 0` always loses `no_flames` first, even on the dawn tick.
    - Invalid scenario/inputs JSON or non-strictly-increasing `tick` -> `stderr` + exit code `2`.
-6. **Definition of Done:** Full `npm run verify` green (including Phase 1 standardized regression, all Phase 2 feature scenarios, 21,600-tick headless run ≤ 30s, ≥ 30 FPS at 1280×720) with fresh proof in `docs/proof/phase-2/`.
+6. **Definition of Done:** Full `npm run verify` green (including Phase 1–2 non-replaced regression, Phase 3 fuel/drain/dawn/capacity scenarios, determinism across 3 nights) with fresh proof in `docs/proof/phase-3/`.

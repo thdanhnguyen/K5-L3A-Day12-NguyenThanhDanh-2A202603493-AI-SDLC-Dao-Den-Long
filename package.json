@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build && node scripts/build-headless.mjs",
     "preview": "vite preview --host --port 4173",
     "test": "vitest run",
-    "verify": "npm run build && npm test && node scripts/verify-phase2.mjs"
+    "verify": "npm run build && npm test && node scripts/verify-phase3.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"
