@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Đảo Đèn Lồng — Đêm 1: Đảo Bến</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Active HUD -->
+      <div id="hud" class="hud hidden">
+        <div class="hud-top">
+          <div class="hud-panel hud-stats">
+            <div class="stat-row">
+              <span class="stat-label">Ngọn lửa</span>
+              <span id="hud-flames" class="flames-bar"></span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Ánh sáng</span>
+              <span id="hud-carried" class="stat-value amber">0 / 8</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Đèn Lớn</span>
+              <span id="hud-lanterns" class="stat-value gold">0 / 5</span>
+            </div>
+          </div>
+
+          <div class="hud-panel hud-center">
+            <div id="hud-timer" class="timer-value">03:00</div>
+            <div id="hud-lantern-pills" class="lantern-pills"></div>
+          </div>
+
+          <div class="hud-panel hud-right">
+            <div class="stat-row">
+              <span class="stat-label">Điểm</span>
+              <span id="hud-score" class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Tỏa sáng [Q/F]</span>
+              <span id="hud-pulse" class="stat-value">Sẵn sàng</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Bé Lạc</span>
+              <span id="hud-girl" class="stat-value muted">Trong rừng</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="hud-buffs" class="hud-buffs"></div>
+        <div id="hud-toast" class="hud-toast hidden"></div>
+
+        <div class="hud-bottom">
+          <div id="hud-prompt" class="hud-prompt hidden"></div>
+          <div class="hud-controls-hint">
+            <span><b>WASD / Mũi tên</b> Di chuyển</span>
+            <span><b>Space</b> Nhảy</span>
+            <span><b>E</b> Thắp đèn</span>
+            <span><b>Q / F</b> Tỏa sáng</span>
+            <span><b>H</b> Chim Giấy dẫn đường</span>
+            <span><b>Kéo chuột / J,L</b> Xoay góc nhìn</span>
+            <button id="btn-mute" class="mini-btn" type="button">[M] Âm thanh: Bật</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Start Screen -->
+      <div id="start-screen" class="overlay">
+        <div class="modal-card">
+          <div class="badge">ĐÊM 1 · ĐẢO BẾN</div>
+          <h1>Đảo Đèn Lồng</h1>
+          <p class="story">
+            Sương đen đã nuốt trọn ánh sáng của hòn đảo giữa biển mây. Hãy cùng <b>Mây</b> và
+            <b>Chim Giấy Đèn Lồng</b> thu thập đom đóm, tìm <b>Bé Lạc</b> trong khu rừng nhỏ,
+            và thắp sáng cả <b>5 Đèn Lồng Lớn</b> trước khi bình minh tới!
+          </p>
+          <div class="legend-grid">
+            <div class="legend-item"><span class="dot gold"></span>Vàng: Ánh sáng (+1)</div>
+            <div class="legend-item"><span class="dot red"></span>Đỏ: Tăng sức mạnh Tỏa Sáng</div>
+            <div class="legend-item"><span class="dot blue"></span>Xanh dương: Tăng tốc độ</div>
+            <div class="legend-item"><span class="dot green"></span>Xanh lá: Hồi năng lượng & lửa</div>
+          </div>
+          <p class="controls-summary">
+            <b>WASD/Mũi tên:</b> Đi · <b>Space:</b> Nhảy · <b>E:</b> Nạp & Thắp đèn ·
+            <b>Q/F:</b> Tỏa sáng xua Bóng Mực · <b>H:</b> Chim Giấy chỉ đường · <b>Kéo chuột:</b> Xoay camera
+          </p>
+          <button id="btn-start" class="primary-btn" type="button">Bắt đầu Đêm 1</button>
+        </div>
+      </div>
+
+      <!-- End Screen -->
+      <div id="end-screen" class="overlay hidden">
+        <div class="modal-card">
+          <div id="end-badge" class="badge">KẾT THÚC</div>
+          <h1 id="end-title">Đảo Đèn Lồng</h1>
+          <p id="end-reason" class="story"></p>
+          <div id="end-breakdown" class="score-breakdown"></div>
+          <button id="btn-replay" class="primary-btn" type="button">Chơi lại Đêm 1</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
