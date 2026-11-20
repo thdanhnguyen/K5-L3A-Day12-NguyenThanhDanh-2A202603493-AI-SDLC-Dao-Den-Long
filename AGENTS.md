@@ -1,21 +1,23 @@
-# AGENTS.md — Đảo Đèn Lồng (Phase 3 · Contract v1.2)
+# AGENTS.md — Đảo Đèn Lồng (Phase 4 · Contract v1.3)
 
 ## Commands
 - Install: `npm ci` (or `npm install`)
-- Build (UI + Headless CLI): `npm run build`
-- Run 3D game: `npm run preview`
+- Build (UI + Headless + Run/Bench/Soak CLIs): `npm run build`
+- Run 3D game: `node dist/cli/run.js` (or `npm run preview`)
+- Export leaderboard: `node dist/cli/run.js --export-leaderboard out.json`
 - Run headless CLI: `node dist/headless/cli.js --seed <int> --night <1|2|3> --ticks <int> --out <file.jsonl>`
+- Run benchmark (1280×720): `node dist/cli/bench.js --seed 42 --duration 30 --out bench.json`
+- Run 10-night soak test: `node dist/cli/soak.js --seed 7 --nights 10 --out soak.json`
 - Full verification & proof: `npm run verify`
 
 ## Hard Rules
 1. **Pure simulation boundary:** `src/sim/` MUST NEVER import `three`, browser DOM globals (`window`, `document`), or call `Math.random()`. Use `Mulberry32` PRNG only.
 2. **Single source of truth:** All tuning values MUST be imported from `game.contract.json` via `src/sim/config.ts`; standardized Night 1/2/3 map layouts live in `src/sim/maps.ts`.
-3. **Creative isolation:** Creative additions (Bé Lạc wandering girl, Origami Lantern Bird, Large/Small Shades, colored mote buffs) MUST ONLY run when `options.creative === true` (browser UI). Headless CLI MUST always pass `creative: false`.
+3. **Creative isolation:** Creative additions (Bé Lạc, Origami Lantern Bird, Large/Small Shades, colored mote buffs) MUST ONLY run when `options.creative === true` (normal browser play). Headless CLI, benchmark scene, and soak test MUST pass `creative: false`.
 4. **Cross-platform:** Keep all filenames lowercase. Use `node:path` and `\n` line endings so Linux/macOS/Windows behave identically.
-5. **Test Contract v1.2 invariants:**
-   - Fixed `1/60s` tick using integer `1/60` units for lantern fuel (`fuelUnits` max `6000`) and integer tick counters for all timers/cooldowns/TTLs (zero IEEE-754 drift).
-   - Follow the exact 12-step tick order (with fuel decay + drain in step 2, auto-extinguish `fuel <= 0` right after step 2).
-   - Shade states MUST be strictly `spawning | wander | chase | recoil | stunned | drain`.
-   - Win only at dawn (`dawn_survived`) with `lit >= ceil(0.6 * total)`; `flames <= 0` always loses `no_flames` first, even on the dawn tick.
-   - Invalid scenario/inputs JSON or non-strictly-increasing `tick` -> `stderr` + exit code `2`.
-6. **Definition of Done:** Full `npm run verify` green (including Phase 1–2 non-replaced regression, Phase 3 fuel/drain/dawn/capacity scenarios, determinism across 3 nights) with fresh proof in `docs/proof/phase-3/`.
+5. **Contract v1.3 invariants:**
+   - Benchmark: `1280×720`, Night 1, 200 wander shades + 100 motes (seed 42), `L1–L3` lit at `fuel=100`, no spawns/damage/pickup/decay/game-over, camera radius `30m` at `Y=15m` circling counter-clockwise from `(30,15,0)` every `15s`, 3s warmup + `--duration` measurement.
+   - Soak: 10 consecutive nights (1→2→3 cycle), seed `7+i`, `crashes = 0`, `mem_end_mb <= 1.2 * mem_start_mb`.
+   - Leaderboard: top 10 on local disk, `[A-Za-z0-9_]{3,12}`, sorted `score` desc then earlier `achieved_at`.
+   - Accessibility: remappable keys with conflict detection + reset, visual captions + shade-spawn edge arrow, reduced motion toggle, `>= 18px` base UI font + `×1.25` large text toggle.
+6. **Definition of Done:** Full `npm run verify` green, `bench.json` & `soak.json` committed, `CHANGELOG.md`, `CREDITS.md`, `LICENSE`, `docs/notes/retro.md`, and `docs/proof/phase-4/SUMMARY.md` complete.
