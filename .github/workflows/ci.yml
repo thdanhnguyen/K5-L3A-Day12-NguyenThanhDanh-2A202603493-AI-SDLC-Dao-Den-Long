@@ -23,11 +23,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build UI & Headless CLI
-        run: npm run build
-
-      - name: Run Unit & Test Contract v1.0 Suite
-        run: npm test
-
-      - name: Run Determinism & Proof Verification
-        run: node scripts/verify-phase1.mjs
+      - name: Build UI, Headless CLI & Run Phase 2 Verification
+        run: npm run verify

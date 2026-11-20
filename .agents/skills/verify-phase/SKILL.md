@@ -1,9 +1,9 @@
 ---
 name: verify-phase
-description: Build, run unit & contract tests, verify headless determinism, and save fresh Phase 1 proof artifacts.
+description: Build, run unit & contract v1.1 tests, benchmark 21,600 headless ticks, verify determinism across 3 nights, and save proof artifacts.
 ---
 
-# Verify Phase Skill
+# Verify Phase Skill (Contract v1.1)
 
 Run this procedure before completing any phase or tagging a release:
 
@@ -13,19 +13,20 @@ Run this procedure before completing any phase or tagging a release:
    ```
    Confirm `dist/index.html` and `dist/headless/cli.js` exist.
 
-2. Run the full Vitest suite (unit tests + Test Contract v1.0 subprocess scenarios + exit-code-2 checks + determinism check):
+2. Run the full Vitest suite (unit tests + Phase 1 regression + Phase 2 Contract v1.1 scenarios + exit-code-2 checks + 3-night determinism):
    ```bash
    npm test
    ```
    All tests must pass with zero skipped or relaxed assertions.
 
-3. Generate fresh Phase 1 verification proof matching the current working tree:
+3. Generate fresh Phase 2 verification proof matching the current working tree:
    ```bash
-   node scripts/verify-phase1.mjs
+   node scripts/verify-phase2.mjs
    ```
-   Inspect `docs/proof/phase-1/SUMMARY.md` to confirm:
-   - All scenario outputs end cleanly (`exit 0`).
-   - Two consecutive runs with `--seed 42 --night 1 --ticks 300` produce identical SHA-256 hashes.
+   Inspect `docs/proof/phase-2/SUMMARY.md` to confirm:
+   - Night 1, 2, and 3 scenario outputs pass (`exit 0`).
+   - Two consecutive runs across `--night 1`, `--night 2`, and `--night 3` produce identical SHA-256 hashes.
+   - Full 21,600-tick Night 3 headless simulation completes well under the `<= 30s` budget.
    - Malformed input/scenario tests exit with code `2`.
 
-4. For UI changes, verify the rendered 3D game in a real browser (`npm run preview`), play through Night 1 controls, and check for zero console errors.
+4. Verify 3D WebGL UI at `1280x720` (`npm run preview`) across Main Menu, Night Intro, HUD, Pause, Settings persistence, and `>= 30 FPS` average.
