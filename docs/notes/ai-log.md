@@ -73,3 +73,5 @@
 - **Kết quả đo thực tế:**
   - `soak.json`: `nights: 10`, `crashes: 0`, `mem_start_mb: 52.38`, `mem_end_mb: 61.05` (`<= 1.2×`), `duration_s: 0.36`.
   - `bench.json`: `contract_version: "1.3"`, `avg_fps: 17.6`, `p1_low_fps: 9.6`, `frame_ms_p95: 69.2`, `frames: 582`, `load_ms: 3201`, `peak_mem_mb: 39.1`.
+- **Hiệu năng & Token Phase 4:**
+  - Ước tính tiêu thụ Phase 4: ~65.000–85.000 tokens (xây dựng `bench`/`soak`/`run` CLIs, UI Bảng xếp hạng + Trợ năng, kiểm thử, tài liệu phát hành & hiệu ứng bình minh).

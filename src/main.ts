@@ -367,7 +367,13 @@ function frame(nowMs: number): void {
       }
 
       visualTimeS += frameDt;
-      world.syncLanterns(sim.lanterns, sim.wind, visualTimeS, frameDt);
+      const dawnProgress =
+    sim.state === 'won'
+      ? 1
+      : isStarted && sim.state === 'playing' && sim.timeLeftS <= 30
+        ? Math.max(0, Math.min(1, (30 - sim.timeLeftS) / 30)) * 0.85
+        : 0;
+  world.syncLanterns(sim.lanterns, sim.wind, visualTimeS, frameDt, dawnProgress);
       entities.sync(
         sim.player,
         sim.lanterns,
@@ -419,7 +425,13 @@ function frame(nowMs: number): void {
       return;
     }
 
-    world.syncLanterns(sim.lanterns, sim.wind, visualTimeS, frameDt);
+    const dawnProgress =
+    sim.state === 'won'
+      ? 1
+      : isStarted && sim.state === 'playing' && sim.timeLeftS <= 30
+        ? Math.max(0, Math.min(1, (30 - sim.timeLeftS) / 30)) * 0.85
+        : 0;
+  world.syncLanterns(sim.lanterns, sim.wind, visualTimeS, frameDt, dawnProgress);
     entities.sync(
       sim.player,
       sim.lanterns,
@@ -540,7 +552,13 @@ function frame(nowMs: number): void {
     followCam.rotateBy(10 * frameDt);
   }
 
-  world.syncLanterns(sim.lanterns, sim.wind, visualTimeS, frameDt);
+  const dawnProgress =
+    sim.state === 'won'
+      ? 1
+      : isStarted && sim.state === 'playing' && sim.timeLeftS <= 30
+        ? Math.max(0, Math.min(1, (30 - sim.timeLeftS) / 30)) * 0.85
+        : 0;
+  world.syncLanterns(sim.lanterns, sim.wind, visualTimeS, frameDt, dawnProgress);
   entities.sync(
     sim.player,
     sim.lanterns,

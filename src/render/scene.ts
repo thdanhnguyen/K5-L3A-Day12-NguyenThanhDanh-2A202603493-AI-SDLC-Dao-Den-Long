@@ -567,7 +567,13 @@ export class IslandWorld {
     }
   }
 
-  syncLanterns(lanterns: LanternState[], wind: WindState, timeS: number, dt: number): void {
+  syncLanterns(
+    lanterns: LanternState[],
+    wind: WindState,
+    timeS: number,
+    dt: number,
+    dawnProgress = 0
+  ): void {
     let litCount = 0;
     for (const lantern of lanterns) {
       if (lantern.lit) litCount++;
@@ -636,15 +642,18 @@ export class IslandWorld {
 
     const total = Math.max(1, lanterns.length);
     const ratioLit = litCount / total;
-    // Exact spec ambient intensity: 0.15 + 0.55 * (lit / total)
-    this.ambientLight.intensity = 0.15 + 0.55 * ratioLit;
+    const dawn = Math.max(0, Math.min(1, dawnProgress));
+    // Exact spec ambient intensity: 0.15 + 0.55 * (lit / total), plus sunrise glow at dawn
+    this.ambientLight.intensity = 0.15 + 0.55 * ratioLit + dawn * 0.35;
 
     this.currentWarmth += (ratioLit - this.currentWarmth) * (1 - Math.exp(-2.2 * dt));
-    this.workColor.copy(this.skyColor).lerp(this.warmSkyColor, this.currentWarmth);
+    const dawnSky = new THREE.Color('#f4a261');
+    const dawnFog = new THREE.Color('#f7c59f');
+    this.workColor.copy(this.skyColor).lerp(this.warmSkyColor, this.currentWarmth).lerp(dawnSky, dawn);
     (this.scene.background as THREE.Color).copy(this.workColor);
-    this.fog.color.copy(this.fogColor);
-    this.fog.density = 0.0045 - this.currentWarmth * 0.0018;
-    this.hemiLight.intensity = 1.15 + this.currentWarmth * 0.45;
+    this.fog.color.copy(this.fogColor).lerp(dawnFog, dawn * 0.85);
+    this.fog.density = Math.max(0.0018, 0.0045 - this.currentWarmth * 0.0018 - dawn * 0.0015);
+    this.hemiLight.intensity = 1.15 + this.currentWarmth * 0.45 + dawn * 1.1;
 
     for (const cloud of this.clouds) {
       const baseAngle = cloud.userData.baseAngle as number;
