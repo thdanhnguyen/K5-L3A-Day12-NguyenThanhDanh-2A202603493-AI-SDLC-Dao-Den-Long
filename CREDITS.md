@@ -1,15 +1,11 @@
-# Credits & Asset Attribution
+# Credits — Đảo Đèn Lồng
 
-## Original Assets & Code
-- **Game Design, Simulation, Procedural 3D Models & Procedural Audio:** Tự tạo 100% bằng code (TypeScript + Three.js primitives + Web Audio API pentatonic synthesizer), không sử dụng asset bên ngoài có bản quyền hạn chế.
-- **Nhân vật & Bối cảnh:** Đảo Đèn Lồng, Đảo Bến, Mây, Bé Lạc, Chim Giấy Đèn Lồng, Bóng Mực Lớn/Nhỏ thuộc thiết kế gốc của bài lab Đảo Đèn Lồng.
-
-## Open-Source Libraries
-- **Three.js** (`three`) — MIT License — 3D WebGL rendering.
-- **Vite** (`vite`) — MIT License — Build tool and static preview server.
-- **Vitest** (`vitest`) — MIT License — Unit and contract test runner.
-- **esbuild** (`esbuild`) — MIT License — Headless CLI bundling.
-- **TypeScript** (`typescript`) — Apache-2.0 License — Static type checking.
-
-## AI Tools Used
-- **Antigravity AI Agent (Google DeepMind):** Hỗ trợ lập kế hoạch, sinh mã nguồn, viết bộ kiểm thử headless và tổng hợp tài liệu kiểm chứng dưới sự rà soát của tác giả.
+- **Tác giả & Phát triển:** Nguyễn Thành Danh (K5-L3-LAB-Day12, `2A202603493`)
+- **Hỗ trợ AI-SDLC:** Google Antigravity Agent
+- **Engine & Thư viện mã nguồn mở:**
+  - [Three.js](https://threejs.org/) (MIT License) — Đồ họa WebGL 3D
+  - [TypeScript](https://www.typescriptlang.org/) (Apache-2.0) — Ngôn ngữ và kiểm tra kiểu tĩnh
+  - [Vite](https://vitejs.dev/) (MIT License) — Đóng gói ứng dụng web
+  - [esbuild](https://esbuild.github.io/) (MIT License) — Đóng gói CLI Node.js độc lập
+  - [Vitest](https://vitest.dev/) (MIT License) — Kiểm thử đơn vị và Test Contract
+- **Âm thanh:** Tổng hợp thời gian thực 100% bằng Web Audio API (không sử dụng asset có bản quyền bên ngoài).

@@ -91,6 +91,7 @@ export class Simulation {
   readonly night: 1 | 2 | 3;
   readonly map: NightMapDef;
   readonly creative: boolean;
+  readonly benchMode: boolean;
   readonly prng: Mulberry32;
 
   tick = 0;
@@ -131,10 +132,11 @@ export class Simulation {
     options: SimOptions = {}
   ) {
     this.seed = seed | 0;
-    this.night = night;
-    this.map = getNightMap(night);
-    this.creative = Boolean(options.creative);
-    this.prng = new Mulberry32(this.seed ^ (night * 0x9e3779b9));
+    this.benchMode = Boolean(options.benchMode);
+    this.night = this.benchMode ? 1 : night;
+    this.map = getNightMap(this.night);
+    this.creative = this.benchMode ? false : Boolean(options.creative);
+    this.prng = new Mulberry32(this.seed ^ (this.night * 0x9e3779b9));
 
     this.initialTimeLeftS = scenario.time_left_s ?? this.map.durationS;
     this.timeLeftS = this.initialTimeLeftS;
@@ -338,6 +340,82 @@ export class Simulation {
     }
 
     this.wanderingGirl = createWanderingGirl(this.creative, this.night, this.prng);
+
+    if (this.benchMode) {
+      this.randomMotesEnabled = false;
+      this.randomShadesEnabled = false;
+      this.randomDriftersEnabled = false;
+      this.wind.enabled = false;
+      this.player.pos = [0, 0, 0];
+      this.player.vel = [0, 0, 0];
+      this.player.grounded = true;
+
+      for (const l of this.lanterns) {
+        if (l.id === 'L1' || l.id === 'L2' || l.id === 'L3') {
+          l.lit = true;
+          l.everLit = true;
+          l.deposited = TUNING.lantern_cost;
+          l.fuelUnits = FUEL_MAX_UNITS;
+        } else {
+          l.lit = false;
+          l.everLit = false;
+          l.deposited = 0;
+          l.fuelUnits = 0;
+        }
+      }
+
+      const benchSafe = this.lanterns.filter((l) => l.lit);
+      this.motes = [];
+      let attempts = 0;
+      while (this.motes.length < 100 && attempts < 2000) {
+        attempts++;
+        const r = Math.sqrt(this.prng.next()) * 37.0;
+        const theta = this.prng.range(0, Math.PI * 2);
+        const mx = Math.cos(theta) * r;
+        const mz = Math.sin(theta) * r;
+        if (!isOnWalkableGround(this.map, mx, mz)) continue;
+        const my = getGroundHeightAt(this.map, mx, mz);
+        if (my <= -Infinity) continue;
+        this.motes.push({
+          id: this.allocMoteId(),
+          pos: [mx, my, mz],
+          color: 'gold',
+          kind: 'random',
+          ttlTicks: null,
+          justSpawned: false,
+        });
+      }
+
+      this.shades = [];
+      attempts = 0;
+      while (this.shades.length < 200 && attempts < 4000) {
+        attempts++;
+        const r = Math.sqrt(this.prng.next()) * 37.0;
+        const theta = this.prng.range(0, Math.PI * 2);
+        const sx = Math.cos(theta) * r;
+        const sz = Math.sin(theta) * r;
+        if (!isOnWalkableGround(this.map, sx, sz)) continue;
+        const sy = getGroundHeightAt(this.map, sx, sz);
+        if (sy <= -Infinity) continue;
+        const pos: Vec3 = [sx, sy, sz];
+        this.projectOutsideLitSafeZones(pos, benchSafe);
+        this.shades.push({
+          id: this.allocShadeId(),
+          pos,
+          state: 'wander',
+          stateTicksLeft: 0,
+          pushTicksLeft: 0,
+          pushStep: [0, 0],
+          recoilDir: [1, 0],
+          safePushTicks: 0,
+          targetLanternId: null,
+          drainTicks: 0,
+          wanderAngle: this.prng.range(0, Math.PI * 2),
+          justSpawned: false,
+          variant: 'standard',
+        });
+      }
+    }
   }
 
   private allocMoteId(): string {
@@ -384,6 +462,68 @@ export class Simulation {
 
   step(input: StepInput): SimEvent[] {
     if (this.state === 'won' || this.state === 'lost') {
+      return [];
+    }
+
+    if (this.benchMode) {
+      this.tick += 1;
+      this.simTick += 1;
+      const safeLanterns = this.lanterns.filter((l) => l.lit && l.fuelUnits >= LOW_FUEL_UNITS);
+      const wSpeed = this.map.shadeSpeed * 0.45;
+      for (const shade of this.shades) {
+        let unlitTarget: LanternState | null = null;
+        let unlitDist = Infinity;
+        for (const l of this.lanterns) {
+          if (l.lit) continue;
+          const d = distXZ(shade.pos, l.pos);
+          if (
+            d < unlitDist - 1e-9 ||
+            (Math.abs(d - unlitDist) <= 1e-9 && unlitTarget !== null && l.id < unlitTarget.id)
+          ) {
+            unlitDist = d;
+            unlitTarget = l;
+          }
+        }
+        if (unlitTarget !== null && unlitDist > 2.2) {
+          const dx = unlitTarget.pos[0] - shade.pos[0];
+          const dz = unlitTarget.pos[2] - shade.pos[2];
+          const stepLen = Math.min(unlitDist, wSpeed * DT);
+          const nx = shade.pos[0] + (dx / unlitDist) * stepLen;
+          const nz = shade.pos[2] + (dz / unlitDist) * stepLen;
+          const [rx, rz] = resolveHorizontalObstacles(
+            this.map,
+            shade.pos[0],
+            shade.pos[2],
+            nx,
+            nz,
+            shade.pos[1]
+          );
+          if (isOnWalkableGround(this.map, rx, rz)) {
+            shade.pos[0] = rx;
+            shade.pos[2] = rz;
+            this.projectOutsideLitSafeZones(shade.pos, safeLanterns);
+          }
+        } else {
+          shade.wanderAngle += 0.015;
+          const nx = shade.pos[0] + Math.cos(shade.wanderAngle) * wSpeed * DT;
+          const nz = shade.pos[2] + Math.sin(shade.wanderAngle) * wSpeed * DT;
+          const [rx, rz] = resolveHorizontalObstacles(
+            this.map,
+            shade.pos[0],
+            shade.pos[2],
+            nx,
+            nz,
+            shade.pos[1]
+          );
+          if (isOnWalkableGround(this.map, rx, rz)) {
+            shade.pos[0] = rx;
+            shade.pos[2] = rz;
+            this.projectOutsideLitSafeZones(shade.pos, safeLanterns);
+          } else {
+            shade.wanderAngle += Math.PI * 0.75;
+          }
+        }
+      }
       return [];
     }
 

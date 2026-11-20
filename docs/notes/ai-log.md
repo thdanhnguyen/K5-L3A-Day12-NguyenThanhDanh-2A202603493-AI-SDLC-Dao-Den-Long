@@ -64,3 +64,12 @@
 - **Xử lý Change Request (`[THAY THẾ]`):** Viết [adr-001-lantern-fuel-and-dawn.md](adr-001-lantern-fuel-and-dawn.md) và [CHANGELOG.md](../../CHANGELOG.md) trước khi sửa code; giữ nguyên 14/15 test Phase 1–2 không bị thay thế và chỉ cập nhật đúng test `02` (không còn thắng sớm `all_lit`) kèm lý do rõ ràng.
 - **Độ chính xác nhiên liệu & test:** Lưu dầu bằng số nguyên `1/60` (`fuelUnits` max `6000`) nên phép hao `1/s`, hút `5/s` và `ceil((100 - fuel)/10)` không có sai số dấu phẩy động. Test `16` chứng minh đèn đầy `100` sau 5 tick tự nhiên giảm còn `99.917` và cần đúng `1` đom đóm để châm lại.
 - **Hiệu năng & Token Phase 3:** Headless 18.000 tick Đêm 3 hoàn thành trong `~0.35s`; ước tính token Phase 3: ~40.000–55.000 tokens.
+
+## Phase 4 (Contract v1.3 · `phase-4` · `v1.0.0`)
+- **Mục tiêu:** Benchmark `1280×720`, Soak test 10 Đêm, Bảng xếp hạng địa phương + `--export-leaderboard`, Trợ năng (đổi phím, phụ đề trực quan + mũi tên Bóng Mực, Giảm chuyển động, cỡ chữ `>= 18px` + Chữ lớn `×1.25`), tài liệu phát hành và đóng gói.
+- **Quyết định kỹ thuật:**
+  - Thêm `benchMode?: boolean` vào `SimOptions` trong `src/sim/engine.ts` để tách biệt cảnh benchmark (200 Bóng Mực `wander`, 100 đom đóm, `L1–L3` sáng, tắt creative/decay/damage/pickup/spawn/win-loss) mà không phá vỡ ranh giới thuần của `src/sim/`.
+  - Dùng `node:http` + trình duyệt Chromium/Edge/Chrome có sẵn trong `src/cli/bench.ts` và `src/cli/run.ts` để giữ gói cài đặt gọn nhẹ, đa nền tảng.
+- **Kết quả đo thực tế:**
+  - `soak.json`: `nights: 10`, `crashes: 0`, `mem_start_mb: 52.38`, `mem_end_mb: 61.05` (`<= 1.2×`), `duration_s: 0.36`.
+  - `bench.json`: `contract_version: "1.3"`, `avg_fps: 17.6`, `p1_low_fps: 9.6`, `frame_ms_p95: 69.2`, `frames: 582`, `load_ms: 3201`, `peak_mem_mb: 39.1`.

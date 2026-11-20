@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TUNING } from '../src/sim/config';
+import { Simulation } from '../src/sim/engine';
 
 const ROOT = path.resolve(__dirname, '..');
 const CLI_PATH = path.join(ROOT, 'dist', 'headless', 'cli.js');
@@ -761,5 +762,75 @@ describe('Headless CLI — Test Contract v1.2 (Regression + Phase 3)', () => {
     const lossRecs = parseJsonl(outLoss);
     const lossOver = lossRecs.find((r) => r.type === 'event' && r.name === 'game_over')!;
     expect(lossOver.data).toEqual({ result: 'lost', reason: 'dawn' });
+  });
+
+  it('19: benchMode initializes 200 wander shades, 100 motes, L1-L3 lit at fuel 100, and steps without decay/damage', () => {
+    const sim = new Simulation(42, 1, {}, { creative: false, benchMode: true });
+    expect(sim.shades).toHaveLength(200);
+    expect(sim.shades.every((s) => s.state === 'wander')).toBe(true);
+    expect(sim.motes).toHaveLength(100);
+    expect(sim.lanterns.filter((l) => l.lit).map((l) => l.id)).toEqual(['L1', 'L2', 'L3']);
+    expect(sim.lanterns.slice(0, 3).every((l) => l.fuelUnits === 6000)).toBe(true);
+
+    const firstShadeStart = [...sim.shades[0].pos];
+    for (let t = 0; t < 60; t++) {
+      const evs = sim.step({
+        move: [1, 0],
+        camYawDeg: 0,
+        jumpPressed: true,
+        interactPressed: true,
+        pulsePressed: true,
+        dashPressed: true,
+        pausePressed: false,
+      });
+      expect(evs).toEqual([]);
+    }
+    expect(sim.player.pos).toEqual([0, 0, 0]);
+    expect(sim.player.flames).toBe(3);
+    expect(sim.lanterns[0].fuelUnits).toBe(6000);
+    expect(sim.state).toBe('playing');
+    expect(sim.shades[0].pos[0] !== firstShadeStart[0] || sim.shades[0].pos[2] !== firstShadeStart[2]).toBe(
+      true
+    );
+  });
+
+  it('20: soak CLI runs 2 consecutive nights cleanly and writes JSON report', () => {
+    const soakOut = path.join(workDir, 'soak-2.json');
+    const soakPath = path.resolve(process.cwd(), 'dist/cli/soak.js');
+    const res = spawnSync(process.execPath, [soakPath, '--seed', '7', '--nights', '2', '--out', soakOut], {
+      encoding: 'utf8',
+    });
+    expect(res.status).toBe(0);
+    const data = JSON.parse(readFileSync(soakOut, 'utf8'));
+    expect(data.nights).toBe(2);
+    expect(data.crashes).toBe(0);
+    expect(data.results).toHaveLength(2);
+    expect(data.mem_end_mb).toBeLessThanOrEqual(data.mem_start_mb * 1.2);
+  });
+
+  it('21: run CLI --export-leaderboard sorts top 10 by score desc then earlier achieved_at', () => {
+    const lbFile = path.join(workDir, 'lb-store.json');
+    const exportOut = path.join(workDir, 'lb-export.json');
+    const entries = Array.from({ length: 12 }, (_, idx) => ({
+      name: `Player_${idx}`,
+      score: idx === 5 ? 500 : idx === 6 ? 500 : 100 + idx * 10,
+      nights_won: 3,
+      achieved_at: idx === 5 ? '2026-11-20T10:00:00+07:00' : `2026-11-20T11:0${idx % 10}:00+07:00`,
+      seed: 42 + idx,
+    }));
+    writeFileSync(lbFile, JSON.stringify({ entries }), 'utf8');
+
+    const runPath = path.resolve(process.cwd(), 'dist/cli/run.js');
+    const res = spawnSync(process.execPath, [runPath, '--export-leaderboard', exportOut], {
+      encoding: 'utf8',
+      env: { ...process.env, DAO_DEN_LONG_LEADERBOARD_PATH: lbFile },
+    });
+    expect(res.status).toBe(0);
+    const exported = JSON.parse(readFileSync(exportOut, 'utf8'));
+    expect(exported.entries).toHaveLength(10);
+    expect(exported.entries[0].name).toBe('Player_5');
+    expect(exported.entries[0].score).toBe(500);
+    expect(exported.entries[1].name).toBe('Player_6');
+    expect(exported.entries[1].score).toBe(500);
   });
 });

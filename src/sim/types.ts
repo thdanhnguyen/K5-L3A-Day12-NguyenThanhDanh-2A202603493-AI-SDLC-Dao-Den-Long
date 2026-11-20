@@ -259,6 +259,7 @@ export interface CreativeBuffs {
 
 export interface SimOptions {
   creative?: boolean;
+  benchMode?: boolean;
 }
 
 export type SimEvent =

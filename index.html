@@ -44,12 +44,19 @@
         </div>
 
         <div id="hud-buffs" class="hud-buffs"></div>
+        <div id="hud-captions" class="hud-captions" aria-live="polite"></div>
         <div id="hud-toast" class="hud-toast hidden"></div>
 
         <!-- Off-screen arrow indicator to nearest unlit lantern -->
         <div id="offscreen-arrow" class="offscreen-arrow hidden">
           <div class="arrow-triangle"></div>
           <span class="arrow-label">Đèn</span>
+        </div>
+
+        <!-- Edge arrow indicator to newly spawned Shade -->
+        <div id="shade-spawn-arrow" class="offscreen-arrow shade-arrow hidden">
+          <div class="arrow-triangle shade-triangle"></div>
+          <span class="arrow-label">Bóng Mực</span>
         </div>
 
         <div class="hud-bottom">
@@ -84,7 +91,7 @@
       <!-- Main Menu -->
       <div id="start-screen" class="overlay">
         <div class="modal-card">
-          <div class="badge">CONTRACT v1.2 · ĐÈN CẠN DẦU</div>
+          <div class="badge">CONTRACT v1.3 · BÌNH MINH v1.0.0</div>
           <h1>Đảo Đèn Lồng</h1>
           <p class="story">
             Cùng <b>Mây</b> và <b>Chim Giấy Đèn Lồng</b> vượt qua 3 Đêm trên
@@ -101,7 +108,10 @@
               <button class="secondary-btn night-pick-btn" data-night="2" type="button">Đêm 2: Đảo Cau</button>
               <button class="secondary-btn night-pick-btn" data-night="3" type="button">Đêm 3: Đảo Chuông</button>
             </div>
-            <button id="btn-open-settings-main" class="secondary-btn" type="button">Cài đặt</button>
+            <div class="btn-row">
+              <button id="btn-open-leaderboard" class="secondary-btn" type="button">Bảng xếp hạng</button>
+              <button id="btn-open-settings-main" class="secondary-btn" type="button">Cài đặt</button>
+            </div>
           </div>
         </div>
       </div>
@@ -132,8 +142,8 @@
 
       <!-- Settings Modal -->
       <div id="settings-screen" class="overlay hidden">
-        <div class="modal-card">
-          <div class="badge">CÀI ĐẶT</div>
+        <div class="modal-card modal-wide">
+          <div class="badge">CÀI ĐẶT & TRỢ NĂNG</div>
           <h1>Tùy Chỉnh</h1>
           <div class="settings-list">
             <label class="setting-item">
@@ -148,8 +158,36 @@
               <input id="input-colorblind" type="checkbox" />
               <span>Bảng màu dễ phân biệt (Mù màu)</span>
             </label>
+            <label class="setting-toggle">
+              <input id="input-reduced-motion" type="checkbox" />
+              <span>Giảm chuyển động (Tắt rung camera & nhấp nháy)</span>
+            </label>
+            <label class="setting-toggle">
+              <input id="input-large-text" type="checkbox" />
+              <span>Chữ lớn (×1.25)</span>
+            </label>
           </div>
+
+          <div class="keybinds-section">
+            <div class="keybinds-header">
+              <span>Phím điều khiển</span>
+              <button id="btn-reset-keybinds" class="mini-btn" type="button">Khôi phục mặc định</button>
+            </div>
+            <div id="keybind-warning" class="keybind-warning hidden"></div>
+            <div id="keybinds-list" class="keybinds-list"></div>
+          </div>
+
           <button id="btn-close-settings" class="primary-btn" type="button">Lưu & Quay lại</button>
+        </div>
+      </div>
+
+      <!-- Leaderboard Modal -->
+      <div id="leaderboard-screen" class="overlay hidden">
+        <div class="modal-card modal-wide">
+          <div class="badge">BẢNG XẾP HẠNG ĐỊA PHƯƠNG</div>
+          <h1>Top 10 Người Giữ Đèn</h1>
+          <div id="leaderboard-table-wrap" class="leaderboard-table-wrap"></div>
+          <button id="btn-close-leaderboard" class="primary-btn" type="button">Đóng</button>
         </div>
       </div>
 
@@ -160,6 +198,23 @@
           <h1 id="end-title">Đảo Bến Rực Sáng!</h1>
           <p id="end-reason" class="story"></p>
           <div id="end-breakdown" class="score-breakdown"></div>
+          <div id="leaderboard-submit-box" class="lb-submit-box hidden">
+            <label for="lb-name-input" class="lb-submit-label">
+              Lưu điểm lên Bảng xếp hạng (3–12 ký tự: A-Z, 0-9, _):
+            </label>
+            <div class="lb-submit-row">
+              <input
+                id="lb-name-input"
+                class="lb-input"
+                type="text"
+                maxlength="12"
+                placeholder="May_01"
+                autocomplete="off"
+              />
+              <button id="btn-lb-submit" class="primary-btn" type="button">Lưu điểm</button>
+            </div>
+            <div id="lb-submit-msg" class="lb-submit-msg"></div>
+          </div>
           <div class="btn-row">
             <button id="btn-next-night" class="primary-btn hidden" type="button">Sang Đêm kế tiếp</button>
             <button id="btn-replay" class="primary-btn" type="button">Chơi lại Đêm</button>

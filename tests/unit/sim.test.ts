@@ -89,12 +89,15 @@ describe('Contract v1.1 movement transform & input rising edges', () => {
   });
 });
 
-describe('game.contract.json v1.2 single source of truth', () => {
-  it('exposes exact v1.2 schema and matching tuning constants', () => {
+describe('game.contract.json v1.3 single source of truth', () => {
+  it('exposes exact v1.3 schema and matching tuning constants', () => {
     const raw = JSON.parse(
       readFileSync(path.resolve(__dirname, '../../game.contract.json'), 'utf8')
     );
-    expect(raw.contract_version).toBe('1.2');
+    expect(raw.contract_version).toBe('1.3');
+    expect(raw.run_cmd).toBe('node dist/cli/run.js');
+    expect(raw.bench_cmd).toBe('node dist/cli/bench.js');
+    expect(raw.soak_cmd).toBe('node dist/cli/soak.js');
     expect(raw.tuning).toEqual(TUNING);
     expect(CONTRACT.tuning.carry_capacity).toBe(10);
     expect(CONTRACT.tuning.capacity_max).toBe(20);
