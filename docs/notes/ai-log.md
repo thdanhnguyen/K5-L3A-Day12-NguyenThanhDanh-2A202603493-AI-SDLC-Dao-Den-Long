@@ -44,3 +44,15 @@
 - **Lưu ý & Vòng cải tiến sau chơi thử:**
   - Khi subagent trình duyệt mở `http://localhost:4173`, người dùng tiếp quản tab trình duyệt (`BROWSER_USER_TAKEOVER`) để tự chơi thử và góp ý 3 điểm: (1) nâng góc nhìn thứ 3 chếch từ trên xuống (~50°), (2) làm cảnh đêm sáng rõ và ấm hơn, (3) trau chuốt đồ họa đẹp hơn.
   - Nhờ kiến trúc tách biệt `src/sim/` khỏi `src/render/`, toàn bộ nâng cấp góc nhìn (`camera.ts`), ánh sáng/bóng đổ/hoa đăng (`scene.ts`), texture thủ công (`textures.ts`) và tạo hình nhân vật/hào quang (`entities.ts`) được cập nhật gọn gàng mà **không đụng một dòng nào vào logic mô phỏng hay Test Contract v1.0** (hash SHA-256 headless vẫn giữ nguyên tuyệt đối).
+
+---
+
+## 6. Nhật ký & Đánh giá Phase 2 (TICKET-02 · Contract v1.1)
+- **Thay đổi yêu cầu đã xử lý:** Đồng bộ toàn bộ số liệu chuẩn v1.1 (`dash`, `carry_capacity = 10`, `lantern_cost = 10`, `pulse_cost = 3`, điểm nạp đom đóm, `fall_enabled = true`, 5 trạng thái Bóng Mực), xây dựng 3 bản đồ chuẩn (`src/sim/maps.ts`), cơ chế 12 bước cố định (`src/sim/engine.ts`), Gió Lạc, Bùa Gió, Tạm dừng, chuỗi 3 Đêm + Màn hình Bình Minh, cài đặt `localStorage`, bảng màu chuẩn và âm thanh đầy đủ.
+- **Lỗi phát hiện & khắc phục:**
+  - Bộ đếm thời gian dùng số nguyên tick (`invulnTicks`, `dashCdTicks`, `pulseCdTicks`, `charmTicks`, `ttlTicks`) loại bỏ hoàn toàn sai số dấu phẩy động.
+  - Smoke test Đêm 3 phát hiện `game.contract.json` chưa được ghi đè ở lượt chỉnh sửa bị gián đoạn (`time_left_s: null`) -> ghi lại và kiểm chứng ngay trên CLI.
+  - 3 assertion đầu tiên ở `tests/contract.test.ts` (Bóng Mực ở `7m` tự chuyển từ `wander` sang `chase` trong cùng tick do `<= 12m`; người chơi giữ `move` lúc hồi sinh; `pulse` trừ `3` trước khi nhặt lại `3` đom đóm rơi) được đối chiếu từng tick để xác nhận logic chính xác 100%.
+- **Hiệu năng & Token Phase 2:**
+  - Headless 21.600 tick Đêm 3 hoàn thành trong **~0.27s** (ngưỡng yêu cầu `≤ 30s`).
+  - Ước tính token Phase 2: ~75.000–95.000 tokens (giữ gọn bằng cách tái sử dụng toàn bộ kiến trúc `src/sim/` và chỉ mở rộng thêm `maps.ts` + cập nhật có chọn lọc).
