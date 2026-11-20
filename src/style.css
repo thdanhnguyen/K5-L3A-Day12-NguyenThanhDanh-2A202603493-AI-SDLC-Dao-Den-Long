@@ -267,10 +267,41 @@ body,
   margin-bottom: 6px;
 }
 
+body.colorblind {
+  --danger: #ffffff;
+}
+
+body.colorblind .timer-value.urgent::before,
+body.colorblind .wind-badge::before {
+  content: '⚠ ';
+}
+
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.setting-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #f2c14e;
+}
+
 .mote-slots {
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mote-slot {
+  width: 24px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(242, 193, 78, 0.4);
+  background: rgba(91, 95, 110, 0.25);
 }
 
 .mote-slot {

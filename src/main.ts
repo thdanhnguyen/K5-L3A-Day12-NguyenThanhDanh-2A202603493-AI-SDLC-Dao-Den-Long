@@ -13,6 +13,7 @@ const SETTINGS_KEY = 'dao_den_long_settings_v1';
 interface SavedSettings {
   volume: number;
   mouseSens: number;
+  colorblindMode: boolean;
 }
 
 function loadSettings(): SavedSettings {
@@ -24,15 +25,17 @@ function loadSettings(): SavedSettings {
         volume: typeof parsed.volume === 'number' ? Math.max(0, Math.min(1, parsed.volume)) : 0.75,
         mouseSens:
           typeof parsed.mouseSens === 'number' ? Math.max(0.2, Math.min(2.0, parsed.mouseSens)) : 1.0,
+        colorblindMode: Boolean(parsed.colorblindMode),
       };
     }
   } catch {
     // ignore storage errors
   }
-  return { volume: 0.75, mouseSens: 1.0 };
+  return { volume: 0.75, mouseSens: 1.0, colorblindMode: false };
 }
 
 const settings = loadSettings();
+document.body.classList.toggle('colorblind', settings.colorblindMode);
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 
 let currentNight: 1 | 2 | 3 = 1;
@@ -120,9 +123,11 @@ const hud = new HudController(
       sound.stopAmbient();
       hud.showStart();
     },
-    onSettingsChange: (volume, mouseSens) => {
+    onSettingsChange: (volume, mouseSens, colorblindMode) => {
       settings.volume = volume;
       settings.mouseSens = mouseSens;
+      settings.colorblindMode = colorblindMode;
+      document.body.classList.toggle('colorblind', colorblindMode);
       sound.setVolume(volume);
       try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -132,7 +137,8 @@ const hud = new HudController(
     },
   },
   settings.volume,
-  settings.mouseSens
+  settings.mouseSens,
+  settings.colorblindMode
 );
 
 hud.showStart();
@@ -294,7 +300,19 @@ function frame(nowMs: number): void {
         } else if (ev.name === 'lantern_lit') {
           sound.playLanternLit();
           const lantern = sim.lanterns.find((l) => l.id === ev.data.lantern_id);
-          if (lantern) hud.showToast(`Đã thắp sáng ${lantern.name}!`, 3.0);
+          if (lantern) {
+            hud.showToast(
+              ev.data.relight ? `Đã thắp lại ${lantern.name}!` : `Đã thắp sáng ${lantern.name}!`,
+              3.0
+            );
+          }
+        } else if (ev.name === 'refuel') {
+          sound.playDeposit();
+          hud.showToast(`Đã châm dầu (${ev.data.fuel}%)!`, 2.0);
+        } else if (ev.name === 'lantern_out') {
+          sound.playHit();
+          const lantern = sim.lanterns.find((l) => l.id === ev.data.lantern_id);
+          if (lantern) hud.showToast(`${lantern.name} đã cạn dầu và tắt!`, 2.8);
         } else if (ev.name === 'pulse') {
           const empowered = sim.creativeBuffs.powerTimer > 0;
           entities.triggerPulseEffect(sim.player.pos, empowered);
@@ -354,6 +372,7 @@ function frame(nowMs: number): void {
     sim.charms,
     sim.wanderingGirl,
     sim.creativeBuffs,
+    settings.colorblindMode,
     visualTimeS,
     frameDt
   );

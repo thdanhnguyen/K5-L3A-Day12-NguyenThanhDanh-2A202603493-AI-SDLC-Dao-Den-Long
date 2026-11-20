@@ -11,7 +11,7 @@ export interface HudCallbacks {
   onRestartNight: () => void;
   onNextNight: () => void;
   onBackToMenu: () => void;
-  onSettingsChange: (volume: number, mouseSens: number) => void;
+  onSettingsChange: (volume: number, mouseSens: number, colorblind: boolean) => void;
 }
 
 export class HudController {
@@ -50,15 +50,17 @@ export class HudController {
 
   private readonly volInput = document.getElementById('input-volume') as HTMLInputElement;
   private readonly sensInput = document.getElementById('input-sens') as HTMLInputElement;
+  private readonly cbInput = document.getElementById('input-colorblind') as HTMLInputElement;
   private readonly volVal = document.getElementById('val-volume')!;
   private readonly sensVal = document.getElementById('val-sens')!;
 
   private settingsReturnTo: 'start' | 'pause' = 'start';
   private toastTimer = 0;
 
-  constructor(callbacks: HudCallbacks, initialVol: number, initialSens: number) {
+  constructor(callbacks: HudCallbacks, initialVol: number, initialSens: number, initialColorblind: boolean) {
     this.volInput.value = String(Math.round(initialVol * 100));
     this.sensInput.value = String(Math.round(initialSens * 100));
+    this.cbInput.checked = initialColorblind;
     this.volVal.textContent = `${this.volInput.value}%`;
     this.sensVal.textContent = `${(Number(this.sensInput.value) / 100).toFixed(1)}×`;
 
@@ -101,12 +103,14 @@ export class HudController {
     const emitSettings = () => {
       const v = Number(this.volInput.value) / 100;
       const s = Number(this.sensInput.value) / 100;
+      const cb = this.cbInput.checked;
       this.volVal.textContent = `${this.volInput.value}%`;
       this.sensVal.textContent = `${s.toFixed(1)}×`;
-      callbacks.onSettingsChange(v, s);
+      callbacks.onSettingsChange(v, s, cb);
     };
     this.volInput.addEventListener('input', emitSettings);
     this.sensInput.addEventListener('input', emitSettings);
+    this.cbInput.addEventListener('change', emitSettings);
   }
 
   private hideAllScreens(): void {
@@ -186,13 +190,14 @@ export class HudController {
     }
 
     const litCount = sim.lanterns.filter((l) => l.lit).length;
-    this.lanternsEl.textContent = `${litCount} / ${sim.lanterns.length}`;
+    const needed = Math.ceil(TUNING.win_ratio * sim.lanterns.length);
+    this.lanternsEl.textContent = `${litCount} / ${sim.lanterns.length} (cần ≥ ${needed})`;
     this.scoreEl.textContent = String(totalCampaignScore + sim.score);
 
-    // 10-slot mote bar
-    this.carriedEl.textContent = `${sim.player.carried} / ${TUNING.carry_capacity}`;
+    // Dynamic mote bar (10..20 slots)
+    this.carriedEl.textContent = `${sim.player.carried} / ${sim.player.capacity}`;
     let slotsHtml = '';
-    for (let i = 0; i < TUNING.carry_capacity; i++) {
+    for (let i = 0; i < sim.player.capacity; i++) {
       slotsHtml += `<span class="mote-slot ${i < sim.player.carried ? 'filled' : ''}"></span>`;
     }
     this.moteSlotsEl.innerHTML = slotsHtml;
@@ -232,12 +237,21 @@ export class HudController {
     }
     this.buffsEl.innerHTML = badges.join('');
 
-    // Interact prompt
-    const nearUnlit = sim.lanterns.find(
-      (l) => !l.lit && distXZ(sim.player.pos, l.pos) <= TUNING.interact_radius && Math.abs(sim.player.pos[1] - l.pos[1]) <= 2.5
+    // Interact prompt (unlit OR lit-below-100-fuel)
+    const nearLantern = sim.lanterns.find(
+      (l) =>
+        (!l.lit || l.fuelUnits < TUNING.fuel_max * TICK_RATE) &&
+        distXZ(sim.player.pos, l.pos) <= TUNING.interact_radius &&
+        Math.abs(sim.player.pos[1] - l.pos[1]) <= 2.5
     );
-    if (nearUnlit) {
-      this.promptEl.textContent = `E — Nạp ánh sáng (${nearUnlit.deposited}/${TUNING.lantern_cost})`;
+    if (nearLantern) {
+      if (!nearLantern.lit) {
+        const cost = nearLantern.everLit ? TUNING.relight_cost : TUNING.lantern_cost;
+        this.promptEl.textContent = `E — Nạp ánh sáng (${nearLantern.deposited}/${cost})`;
+      } else {
+        const fuelPct = Math.round(nearLantern.fuelUnits / TICK_RATE);
+        this.promptEl.textContent = `E — Châm dầu đèn (còn ${fuelPct}%)`;
+      }
       this.promptEl.classList.remove('hidden');
     } else {
       this.promptEl.classList.add('hidden');
@@ -319,15 +333,20 @@ export class HudController {
 
     this.btnNextNight.classList.toggle('hidden', !won || sim.night >= 3);
 
-    const timeBonus = won ? Math.floor(sim.timeLeftS) * TUNING.score.per_second_left : 0;
+    let dawnLanternBonus = 0;
+    if (won) {
+      for (const l of sim.lanterns) {
+        if (l.lit) dawnLanternBonus += 50 + Math.floor(l.fuelUnits / TICK_RATE);
+      }
+    }
     const flameBonus = won ? sim.player.flames * TUNING.score.per_flame_left : 0;
-    const actionScore = sim.score - timeBonus - flameBonus;
+    const actionScore = sim.score - dawnLanternBonus - flameBonus;
     const litCount = sim.lanterns.filter((l) => l.lit).length;
 
     this.endBreakdown.innerHTML = `
-      <div class="score-line"><span>Đèn đã thắp</span><span>${litCount} / ${sim.lanterns.length}</span></div>
-      <div class="score-line"><span>Điểm hành động</span><span>${actionScore}</span></div>
-      <div class="score-line"><span>Thưởng thời gian (${Math.floor(sim.timeLeftS)}s)</span><span>+${timeBonus}</span></div>
+      <div class="score-line"><span>Đèn sáng lúc bình minh</span><span>${litCount} / ${sim.lanterns.length}</span></div>
+      <div class="score-line"><span>Điểm hành động (nạp/thắp/pulse)</span><span>${actionScore}</span></div>
+      <div class="score-line"><span>Thưởng đèn giữ sáng bình minh</span><span>+${dawnLanternBonus}</span></div>
       <div class="score-line"><span>Thưởng Ngọn Lửa (${sim.player.flames})</span><span>+${flameBonus}</span></div>
       <div class="score-line total"><span>Tổng điểm hành trình</span><span>${totalCampaignScore + (won ? sim.score : 0)}</span></div>
     `;

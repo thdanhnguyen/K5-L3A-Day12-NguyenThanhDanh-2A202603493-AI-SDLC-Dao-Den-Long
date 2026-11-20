@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TUNING } from '../sim/config';
+import { TICK_RATE, TUNING } from '../sim/config';
 import type { NightMapDef } from '../sim/maps';
 import type { LanternState, Vec3, WindState } from '../sim/types';
 import { createGlowSpriteTexture, createIslandGroundTexture } from './textures';
@@ -7,7 +7,12 @@ import { createGlowSpriteTexture, createIslandGroundTexture } from './textures';
 interface LanternVisual {
   id: string;
   group: THREE.Group;
+  coreMesh: THREE.Mesh;
   coreMat: THREE.MeshStandardMaterial;
+  tearMarks: THREE.Group;
+  fuelBarGroup: THREE.Group;
+  fuelBarFill: THREE.Mesh;
+  fuelBarFillMat: THREE.MeshBasicMaterial;
   haloSprite: THREE.Sprite;
   haloMat: THREE.SpriteMaterial;
   light: THREE.PointLight;
@@ -446,9 +451,35 @@ export class IslandWorld {
         emissiveIntensity: 0.2,
         roughness: 0.38,
       });
-      const core = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.46, 1.2, 8), coreMat);
-      core.position.y = 2.7;
-      group.add(core);
+      const coreMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.46, 1.2, 8), coreMat);
+      coreMesh.position.y = 2.7;
+      group.add(coreMesh);
+
+      // Paper tear marks visible when lantern is unlit (colorblind-friendly shape cue)
+      const tearMarks = new THREE.Group();
+      const tearMat = new THREE.MeshBasicMaterial({ color: '#1a1a28', side: THREE.DoubleSide });
+      for (const angle of [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5]) {
+        const tear = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.55), tearMat);
+        tear.position.set(Math.sin(angle) * 0.52, 2.65, Math.cos(angle) * 0.52);
+        tear.rotation.y = angle;
+        tear.rotation.z = 0.28;
+        tearMarks.add(tear);
+      }
+      group.add(tearMarks);
+
+      // 3D Fuel bar floating above lit lanterns
+      const fuelBarGroup = new THREE.Group();
+      fuelBarGroup.position.y = 4.65;
+      const fuelBg = new THREE.Mesh(
+        new THREE.BoxGeometry(1.68, 0.2, 0.08),
+        new THREE.MeshBasicMaterial({ color: '#0E1430' })
+      );
+      fuelBarGroup.add(fuelBg);
+      const fuelBarFillMat = new THREE.MeshBasicMaterial({ color: '#FFB347' });
+      const fuelBarFill = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.13, 0.1), fuelBarFillMat);
+      fuelBarGroup.add(fuelBarFill);
+      fuelBarGroup.visible = false;
+      group.add(fuelBarGroup);
 
       const haloMat = new THREE.SpriteMaterial({
         map: this.glowTex,
@@ -517,7 +548,12 @@ export class IslandWorld {
       this.lanternVisuals.set(lantern.id, {
         id: lantern.id,
         group,
+        coreMesh,
         coreMat,
+        tearMarks,
+        fuelBarGroup,
+        fuelBarFill,
+        fuelBarFillMat,
         haloSprite,
         haloMat,
         light,
@@ -538,7 +574,8 @@ export class IslandWorld {
       const vis = this.lanternVisuals.get(lantern.id);
       if (!vis) continue;
 
-      const ratio = Math.min(1, lantern.deposited / TUNING.lantern_cost);
+      const cost = lantern.everLit ? TUNING.relight_cost : TUNING.lantern_cost;
+      const ratio = Math.min(1, lantern.deposited / cost);
       const filledSegments = Math.round(ratio * vis.orbSlots.length);
       vis.orbSlots.forEach((orb, idx) => {
         const mat = orb.material as THREE.MeshBasicMaterial;
@@ -548,14 +585,27 @@ export class IslandWorld {
       });
 
       if (lantern.lit) {
+        const fuel = lantern.fuelUnits / TICK_RATE;
+        const fuelFrac = Math.max(0.02, Math.min(1, fuel / TUNING.fuel_max));
+        const isLow = fuel < TUNING.low_fuel_threshold;
+        const blinkOn = !isLow || Math.sin(timeS * Math.PI * 2) >= 0;
         const flicker = 1 + Math.sin(timeS * 5 + lantern.pos[0]) * 0.06;
+
+        vis.coreMesh.scale.y = 1.0;
+        vis.tearMarks.visible = false;
+        vis.fuelBarGroup.visible = true;
+        vis.fuelBarGroup.lookAt(this.camera.position);
+        vis.fuelBarFill.scale.x = fuelFrac;
+        vis.fuelBarFill.position.x = -(1 - fuelFrac) * 0.78;
+        vis.fuelBarFillMat.color.set(isLow ? (blinkOn ? '#FF5A5F' : '#FFE9B0') : '#FFB347');
+
         vis.coreMat.color.set('#FFE9B0');
         vis.coreMat.emissive.set('#FFB347');
-        vis.coreMat.emissiveIntensity = 2.2 * flicker;
-        vis.haloMat.opacity = 0.85 * flicker;
+        vis.coreMat.emissiveIntensity = (blinkOn ? 2.2 : 0.5) * flicker;
+        vis.haloMat.opacity = (blinkOn ? 0.85 : 0.25) * flicker;
         vis.haloSprite.scale.setScalar(7.2 * flicker);
-        vis.light.intensity = 22 * flicker;
-        vis.safeRing.visible = true;
+        vis.light.intensity = (blinkOn ? 22 : 8) * flicker;
+        vis.safeRing.visible = !isLow;
         vis.progressArc.visible = false;
         vis.emberGroup.visible = true;
         vis.emberGroup.children.forEach((child, idx) => {
@@ -567,6 +617,10 @@ export class IslandWorld {
           );
         });
       } else {
+        // Unlit lanterns deflate 20% vertically and display paper tears
+        vis.coreMesh.scale.y = 0.8;
+        vis.tearMarks.visible = true;
+        vis.fuelBarGroup.visible = false;
         vis.coreMat.color.set('#5B5F6E');
         vis.coreMat.emissive.set('#FFB347');
         vis.coreMat.emissiveIntensity = 0.2 + ratio * 0.9;

@@ -149,7 +149,7 @@ export class EntityVisuals {
     this.playerGroup.add(contactShadow);
     this.playerGroup.add(this.playerBody);
 
-    for (let i = 0; i < TUNING.carry_capacity; i++) {
+    for (let i = 0; i < TUNING.capacity_max; i++) {
       const orb = new THREE.Mesh(
         new THREE.SphereGeometry(0.08, 8, 8),
         new THREE.MeshBasicMaterial({ color: '#FFE58A' })
@@ -318,6 +318,7 @@ export class EntityVisuals {
     charms: CharmState[],
     girl: WanderingGirlState,
     buffs: CreativeBuffs,
+    colorblindMode: boolean,
     timeS: number,
     dt: number
   ): void {
@@ -452,19 +453,26 @@ export class EntityVisuals {
       group.position.set(shade.pos[0], shade.pos[1] + Math.sin(timeS * 3.5 + index) * 0.14, shade.pos[2]);
 
       const bodyMat = group.userData.bodyMat as THREE.MeshStandardMaterial;
+      const eyeMat = group.userData.eyeMat as THREE.MeshBasicMaterial;
+      const auraMat = group.userData.auraMat as THREE.MeshBasicMaterial;
       const stunRing = group.userData.stunRing as THREE.Group;
+
+      const rimHex = colorblindMode ? '#00B3FF' : '#7A3CFF';
+      eyeMat.color.set(rimHex);
+      auraMat.color.set(rimHex);
 
       if (shade.state === 'stunned') {
         bodyMat.color.set('#3A3450');
-        bodyMat.emissive.set('#7A3CFF');
+        bodyMat.emissive.set(rimHex);
         bodyMat.emissiveIntensity = 0.65;
         group.rotation.y = timeS * 8;
         stunRing.visible = true;
         stunRing.rotation.y = -timeS * 5;
       } else {
         bodyMat.color.set('#120A1A');
-        bodyMat.emissive.set('#7A3CFF');
-        bodyMat.emissiveIntensity = shade.state === 'chase' ? 0.55 : 0.35;
+        bodyMat.emissive.set(rimHex);
+        bodyMat.emissiveIntensity =
+          shade.state === 'drain' ? 0.85 : shade.state === 'chase' ? 0.55 : 0.35;
         group.rotation.y = Math.atan2(
           player.pos[0] - shade.pos[0],
           player.pos[2] - shade.pos[2]
@@ -681,14 +689,15 @@ export class EntityVisuals {
       group.add(eye);
     }
 
+    const auraMat = new THREE.MeshBasicMaterial({
+      color: '#7A3CFF',
+      transparent: true,
+      opacity: 0.42,
+      side: THREE.DoubleSide,
+    });
     const auraRing = new THREE.Mesh(
       new THREE.RingGeometry(0.66 * scale, 0.88 * scale, 22),
-      new THREE.MeshBasicMaterial({
-        color: '#7A3CFF',
-        transparent: true,
-        opacity: 0.42,
-        side: THREE.DoubleSide,
-      })
+      auraMat
     );
     auraRing.rotation.x = -Math.PI / 2;
     auraRing.position.y = 0.05;
@@ -716,6 +725,8 @@ export class EntityVisuals {
     group.add(stunRing);
 
     group.userData.bodyMat = bodyMat;
+    group.userData.eyeMat = eyeMat;
+    group.userData.auraMat = auraMat;
     group.userData.stunRing = stunRing;
     return group;
   }
