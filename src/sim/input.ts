@@ -63,7 +63,7 @@ export function validateAndParseInputs(rawJson: string): InputFrame[] {
       frame.cam_yaw_deg = raw.cam_yaw_deg;
     }
 
-    for (const key of ['jump', 'interact', 'pulse', 'dash'] as const) {
+    for (const key of ['jump', 'interact', 'pulse', 'dash', 'pause'] as const) {
       if (key in raw && raw[key] !== undefined) {
         if (typeof raw[key] !== 'boolean') {
           throw new FormatError(`inputs.frames[${i}].${key} must be a boolean`);
@@ -109,11 +109,13 @@ export class InputTimeline {
     interact: false,
     pulse: false,
     dash: false,
+    pause: false,
   };
   private prevJump = false;
   private prevInteract = false;
   private prevPulse = false;
   private prevDash = false;
+  private prevPause = false;
 
   constructor(frames: InputFrame[] = []) {
     this.frames = frames;
@@ -136,12 +138,14 @@ export class InputTimeline {
       interactPressed: this.held.interact && !this.prevInteract,
       pulsePressed: this.held.pulse && !this.prevPulse,
       dashPressed: this.held.dash && !this.prevDash,
+      pausePressed: this.held.pause && !this.prevPause,
     };
 
     this.prevJump = this.held.jump;
     this.prevInteract = this.held.interact;
     this.prevPulse = this.held.pulse;
     this.prevDash = this.held.dash;
+    this.prevPause = this.held.pause;
 
     return stepInput;
   }
@@ -164,6 +168,9 @@ export class InputTimeline {
     }
     if (frame.dash !== undefined) {
       this.held.dash = frame.dash;
+    }
+    if (frame.pause !== undefined) {
+      this.held.pause = frame.pause;
     }
   }
 }

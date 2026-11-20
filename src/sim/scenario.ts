@@ -1,13 +1,33 @@
-import { DEFAULT_NIGHT1_LANTERNS } from './config';
+import { getNightMap } from './maps';
 import {
   FormatError,
+  type DrifterBehaviorState,
+  type MoteKind,
+  type ScenarioCharm,
   type ScenarioData,
+  type ScenarioDrifter,
   type ScenarioLantern,
   type ScenarioMote,
   type ScenarioPlayer,
   type ScenarioShade,
+  type ShadeBehaviorState,
   type Vec3,
 } from './types';
+
+const VALID_SHADE_STATES = new Set<ShadeBehaviorState>([
+  'spawning',
+  'wander',
+  'chase',
+  'recoil',
+  'stunned',
+]);
+
+const VALID_DRIFTER_STATES = new Set<DrifterBehaviorState>([
+  'idle',
+  'chase',
+  'flee',
+  'removed',
+]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -40,7 +60,10 @@ function parseNonNegInt(value: unknown, fieldPath: string): number {
   return value;
 }
 
-export function validateAndParseScenario(rawJson: string): ScenarioData {
+export function validateAndParseScenario(
+  rawJson: string,
+  night: 1 | 2 | 3 = 1
+): ScenarioData {
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawJson);
@@ -68,21 +91,40 @@ export function validateAndParseScenario(rawJson: string): ScenarioData {
     if ('flames' in parsed.player && parsed.player.flames !== undefined) {
       player.flames = parseNonNegInt(parsed.player.flames, 'scenario.player.flames');
     }
+    if ('invuln_ticks' in parsed.player && parsed.player.invuln_ticks !== undefined) {
+      player.invuln_ticks = parseNonNegInt(
+        parsed.player.invuln_ticks,
+        'scenario.player.invuln_ticks'
+      );
+    }
+    if ('dash_cd_ticks' in parsed.player && parsed.player.dash_cd_ticks !== undefined) {
+      player.dash_cd_ticks = parseNonNegInt(
+        parsed.player.dash_cd_ticks,
+        'scenario.player.dash_cd_ticks'
+      );
+    }
+    if ('pulse_cd_ticks' in parsed.player && parsed.player.pulse_cd_ticks !== undefined) {
+      player.pulse_cd_ticks = parseNonNegInt(
+        parsed.player.pulse_cd_ticks,
+        'scenario.player.pulse_cd_ticks'
+      );
+    }
+    if ('charm_ticks' in parsed.player && parsed.player.charm_ticks !== undefined) {
+      player.charm_ticks = parseNonNegInt(
+        parsed.player.charm_ticks,
+        'scenario.player.charm_ticks'
+      );
+    }
     scenario.player = player;
   }
 
-  if ('random_motes' in parsed && parsed.random_motes !== undefined) {
-    if (typeof parsed.random_motes !== 'boolean') {
-      throw new FormatError('scenario.random_motes must be a boolean');
+  for (const flag of ['random_motes', 'random_shades', 'random_drifters', 'wind_enabled'] as const) {
+    if (flag in parsed && parsed[flag] !== undefined) {
+      if (typeof parsed[flag] !== 'boolean') {
+        throw new FormatError(`scenario.${flag} must be a boolean`);
+      }
+      scenario[flag] = parsed[flag];
     }
-    scenario.random_motes = parsed.random_motes;
-  }
-
-  if ('random_shades' in parsed && parsed.random_shades !== undefined) {
-    if (typeof parsed.random_shades !== 'boolean') {
-      throw new FormatError('scenario.random_shades must be a boolean');
-    }
-    scenario.random_shades = parsed.random_shades;
   }
 
   if ('time_left_s' in parsed && parsed.time_left_s !== undefined) {
@@ -98,15 +140,28 @@ export function validateAndParseScenario(rawJson: string): ScenarioData {
       const item = parsed.motes[i];
       if (Array.isArray(item)) {
         const pos = parseVec3(item, `scenario.motes[${i}]`);
-        motes.push([pos[0], 0, pos[2]]);
+        motes.push([pos[0], pos[1], pos[2]]);
       } else if (isPlainObject(item)) {
         const pos = parseVec3(item.pos, `scenario.motes[${i}].pos`);
         if ('id' in item && item.id !== undefined && typeof item.id !== 'string') {
           throw new FormatError(`scenario.motes[${i}].id must be a string`);
         }
+        let kind: MoteKind | undefined;
+        if ('kind' in item && item.kind !== undefined) {
+          if (item.kind !== 'random' && item.kind !== 'dropped') {
+            throw new FormatError(`scenario.motes[${i}].kind must be "random" or "dropped"`);
+          }
+          kind = item.kind;
+        }
+        let ttl_s: number | undefined;
+        if ('ttl_s' in item && item.ttl_s !== undefined) {
+          ttl_s = parseNonNegNumber(item.ttl_s, `scenario.motes[${i}].ttl_s`);
+        }
         motes.push({
           id: typeof item.id === 'string' ? item.id : undefined,
-          pos: [pos[0], 0, pos[2]],
+          pos,
+          kind,
+          ttl_s,
         });
       } else {
         throw new FormatError(`scenario.motes[${i}] must be [x,y,z] or {pos:[x,y,z]}`);
@@ -129,19 +184,96 @@ export function validateAndParseScenario(rawJson: string): ScenarioData {
         throw new FormatError(`scenario.shades[${i}].id must be a string`);
       }
       const pos = parseVec3(item.pos, `scenario.shades[${i}].pos`);
+      let state: ShadeBehaviorState | undefined;
+      if ('state' in item && item.state !== undefined) {
+        if (typeof item.state !== 'string' || !VALID_SHADE_STATES.has(item.state as ShadeBehaviorState)) {
+          throw new FormatError(`scenario.shades[${i}].state is invalid`);
+        }
+        state = item.state as ShadeBehaviorState;
+      }
+      let state_ticks_left: number | undefined;
+      if ('state_ticks_left' in item && item.state_ticks_left !== undefined) {
+        state_ticks_left = parseNonNegInt(
+          item.state_ticks_left,
+          `scenario.shades[${i}].state_ticks_left`
+        );
+      }
       shades.push({
         id: typeof item.id === 'string' ? item.id : undefined,
         pos,
+        state,
+        state_ticks_left,
       });
     }
     scenario.shades = shades;
+  }
+
+  if ('drifters' in parsed && parsed.drifters !== undefined) {
+    if (!Array.isArray(parsed.drifters)) {
+      throw new FormatError('scenario.drifters must be an array');
+    }
+    const drifters: ScenarioDrifter[] = [];
+    for (let i = 0; i < parsed.drifters.length; i++) {
+      const item = parsed.drifters[i];
+      if (!isPlainObject(item)) {
+        throw new FormatError(`scenario.drifters[${i}] must be an object`);
+      }
+      const pos = parseVec3(item.pos, `scenario.drifters[${i}].pos`);
+      let state: DrifterBehaviorState | undefined;
+      if ('state' in item && item.state !== undefined) {
+        if (typeof item.state !== 'string' || !VALID_DRIFTER_STATES.has(item.state as DrifterBehaviorState)) {
+          throw new FormatError(`scenario.drifters[${i}].state is invalid`);
+        }
+        state = item.state as DrifterBehaviorState;
+      }
+      let stolen: number | undefined;
+      if ('stolen' in item && item.stolen !== undefined) {
+        stolen = parseNonNegInt(item.stolen, `scenario.drifters[${i}].stolen`);
+      }
+      drifters.push({
+        id: typeof item.id === 'string' ? item.id : undefined,
+        pos,
+        state,
+        stolen,
+      });
+    }
+    scenario.drifters = drifters;
+  }
+
+  if ('charms' in parsed && parsed.charms !== undefined) {
+    if (!Array.isArray(parsed.charms)) {
+      throw new FormatError('scenario.charms must be an array');
+    }
+    const charms: ScenarioCharm[] = [];
+    for (let i = 0; i < parsed.charms.length; i++) {
+      const item = parsed.charms[i];
+      if (!isPlainObject(item) || typeof item.id !== 'string' || item.id.length === 0) {
+        throw new FormatError(`scenario.charms[${i}].id must be a non-empty string`);
+      }
+      const entry: ScenarioCharm = { id: item.id };
+      if ('pos' in item && item.pos !== undefined) {
+        entry.pos = parseVec3(item.pos, `scenario.charms[${i}].pos`);
+      }
+      if ('available' in item && item.available !== undefined) {
+        if (typeof item.available !== 'boolean') {
+          throw new FormatError(`scenario.charms[${i}].available must be a boolean`);
+        }
+        entry.available = item.available;
+      }
+      if ('respawn_s' in item && item.respawn_s !== undefined) {
+        entry.respawn_s = parseNonNegNumber(item.respawn_s, `scenario.charms[${i}].respawn_s`);
+      }
+      charms.push(entry);
+    }
+    scenario.charms = charms;
   }
 
   if ('lanterns' in parsed && parsed.lanterns !== undefined) {
     if (!Array.isArray(parsed.lanterns)) {
       throw new FormatError('scenario.lanterns must be an array');
     }
-    const validIds = new Set(DEFAULT_NIGHT1_LANTERNS.map((l) => l.id));
+    const map = getNightMap(night);
+    const validIds = new Set(map.lanterns.map((l) => l.id));
     const lanterns: ScenarioLantern[] = [];
     for (let i = 0; i < parsed.lanterns.length; i++) {
       const item = parsed.lanterns[i];
@@ -152,8 +284,7 @@ export function validateAndParseScenario(rawJson: string): ScenarioData {
       }
       const entry: ScenarioLantern = { id: item.id };
       if ('pos' in item && item.pos !== undefined) {
-        const pos = parseVec3(item.pos, `scenario.lanterns[${i}].pos`);
-        entry.pos = [pos[0], 0, pos[2]];
+        entry.pos = parseVec3(item.pos, `scenario.lanterns[${i}].pos`);
       }
       if ('deposited' in item && item.deposited !== undefined) {
         entry.deposited = parseNonNegInt(item.deposited, `scenario.lanterns[${i}].deposited`);

@@ -7,7 +7,7 @@ import { FormatError, type InputFrame, type ScenarioData } from '../sim/types';
 
 interface CliArgs {
   seed: number;
-  night: number;
+  night: 1 | 2 | 3;
   scenarioPath?: string;
   inputsPath?: string;
   ticks: number;
@@ -35,7 +35,7 @@ function parseIntArg(raw: string | undefined, flag: string, minValue: number): n
 
 function parseArgs(argv: string[]): CliArgs {
   let seed: number | undefined;
-  let night: number | undefined;
+  let nightRaw: number | undefined;
   let scenarioPath: string | undefined;
   let inputsPath: string | undefined;
   let ticks: number | undefined;
@@ -49,7 +49,7 @@ function parseArgs(argv: string[]): CliArgs {
         seed = parseIntArg(argv[++i], '--seed', -2147483648);
         break;
       case '--night':
-        night = parseIntArg(argv[++i], '--night', 1);
+        nightRaw = parseIntArg(argv[++i], '--night', 1);
         break;
       case '--scenario':
         scenarioPath = argv[++i];
@@ -75,14 +75,16 @@ function parseArgs(argv: string[]): CliArgs {
   }
 
   if (seed === undefined) throw new UsageError('Missing required flag --seed');
-  if (night === undefined) throw new UsageError('Missing required flag --night');
-  if (night !== 1) throw new UsageError(`Night ${night} is not supported in Phase 1 (expected --night 1)`);
+  if (nightRaw === undefined) throw new UsageError('Missing required flag --night');
+  if (nightRaw !== 1 && nightRaw !== 2 && nightRaw !== 3) {
+    throw new UsageError(`Night ${nightRaw} is not supported (expected --night 1 | 2 | 3)`);
+  }
   if (ticks === undefined) throw new UsageError('Missing required flag --ticks');
   if (!outPath) throw new UsageError('Missing required flag --out');
 
   return {
     seed,
-    night,
+    night: nightRaw,
     scenarioPath,
     inputsPath,
     ticks,
@@ -102,7 +104,7 @@ function run(): void {
     } catch (err) {
       throw new UsageError(`Cannot read scenario file "${args.scenarioPath}": ${(err as Error).message}`);
     }
-    scenario = validateAndParseScenario(rawScenario);
+    scenario = validateAndParseScenario(rawScenario, args.night);
   }
 
   let frames: InputFrame[] = [];
@@ -121,6 +123,14 @@ function run(): void {
 
   const lines: string[] = [];
   lines.push(JSON.stringify(sim.getSnapshot()));
+  lines.push(
+    JSON.stringify({
+      type: 'event',
+      tick: 0,
+      name: 'night_start',
+      data: { night: args.night },
+    })
+  );
 
   for (let k = 0; k < args.ticks; k++) {
     const stepInput = timeline.sampleForTick(k);
@@ -131,7 +141,7 @@ function run(): void {
     if ((k + 1) % args.snapshotEvery === 0) {
       lines.push(JSON.stringify(sim.getSnapshot()));
     }
-    if (sim.state !== 'playing') {
+    if (sim.state === 'won' || sim.state === 'lost') {
       break;
     }
   }

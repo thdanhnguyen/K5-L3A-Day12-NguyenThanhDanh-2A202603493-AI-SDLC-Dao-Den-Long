@@ -1,12 +1,16 @@
 export type Vec3 = [number, number, number];
 
-export type GameState = 'playing' | 'won' | 'lost';
+export type GameState = 'playing' | 'paused' | 'won' | 'lost';
 
 export type MoteColor = 'gold' | 'red' | 'blue' | 'green';
 
+export type MoteKind = 'random' | 'dropped';
+
 export type ShadeVariant = 'standard' | 'small' | 'large';
 
-export type ShadeBehaviorState = 'chase' | 'stunned' | 'flee';
+export type ShadeBehaviorState = 'spawning' | 'wander' | 'chase' | 'recoil' | 'stunned';
+
+export type DrifterBehaviorState = 'idle' | 'chase' | 'flee' | 'removed';
 
 export interface ScoreTuning {
   per_mote: number;
@@ -18,6 +22,9 @@ export interface ScoreTuning {
 
 export interface Tuning {
   player_speed: number;
+  dash_speed: number;
+  dash_duration_s: number;
+  dash_cooldown_s: number;
   carry_capacity: number;
   lantern_cost: number;
   lantern_count_night1: number;
@@ -26,6 +33,8 @@ export interface Tuning {
   pulse_cost: number;
   pulse_radius: number;
   night1_duration_s: number;
+  night2_duration_s: number;
+  night3_duration_s: number;
   flames: number;
   invuln_s: number;
   hit_drop_ratio: number;
@@ -56,6 +65,7 @@ export interface InputFrame {
   interact?: boolean;
   pulse?: boolean;
   dash?: boolean;
+  pause?: boolean;
 }
 
 export interface InputState {
@@ -65,6 +75,7 @@ export interface InputState {
   interact: boolean;
   pulse: boolean;
   dash: boolean;
+  pause: boolean;
 }
 
 export interface StepInput {
@@ -74,17 +85,24 @@ export interface StepInput {
   interactPressed: boolean;
   pulsePressed: boolean;
   dashPressed: boolean;
+  pausePressed: boolean;
 }
 
 export interface ScenarioPlayer {
   pos?: Vec3;
   carried?: number;
   flames?: number;
+  invuln_ticks?: number;
+  dash_cd_ticks?: number;
+  pulse_cd_ticks?: number;
+  charm_ticks?: number;
 }
 
 export interface ScenarioShade {
   id?: string;
   pos: Vec3;
+  state?: ShadeBehaviorState;
+  state_ticks_left?: number;
 }
 
 export interface ScenarioLantern {
@@ -94,26 +112,52 @@ export interface ScenarioLantern {
   lit?: boolean;
 }
 
-export type ScenarioMote = Vec3 | { id?: string; pos: Vec3 };
+export type ScenarioMote = Vec3 | { id?: string; pos: Vec3; kind?: MoteKind; ttl_s?: number };
+
+export interface ScenarioDrifter {
+  id?: string;
+  pos: Vec3;
+  state?: DrifterBehaviorState;
+  stolen?: number;
+}
+
+export interface ScenarioCharm {
+  id: string;
+  pos?: Vec3;
+  available?: boolean;
+  respawn_s?: number;
+}
 
 export interface ScenarioData {
   player?: ScenarioPlayer;
   random_motes?: boolean;
   random_shades?: boolean;
+  random_drifters?: boolean;
+  wind_enabled?: boolean;
   motes?: ScenarioMote[];
   shades?: ScenarioShade[];
   lanterns?: ScenarioLantern[];
+  drifters?: ScenarioDrifter[];
+  charms?: ScenarioCharm[];
   time_left_s?: number;
 }
 
 export interface PlayerState {
   pos: Vec3;
-  vy: number;
+  vel: Vec3;
   grounded: boolean;
   flames: number;
   carried: number;
-  invulnTimer: number;
-  pulseCooldown: number;
+  facing: [number, number];
+  invulnTicks: number;
+  dashTicksLeft: number;
+  dashCdTicks: number;
+  dashDir: [number, number];
+  pulseCdTicks: number;
+  charmTicks: number;
+  respawnWaitTicks: number;
+  launchActive: boolean;
+  launchVel: [number, number];
 }
 
 export interface LanternState {
@@ -128,14 +172,49 @@ export interface MoteState {
   id: string;
   pos: Vec3;
   color: MoteColor;
+  kind: MoteKind;
+  ttlTicks: number | null;
+  justSpawned: boolean;
 }
 
 export interface ShadeState {
   id: string;
   pos: Vec3;
   state: ShadeBehaviorState;
-  stunTimer: number;
+  stateTicksLeft: number;
+  pushTicksLeft: number;
+  pushStep: [number, number];
+  recoilDir: [number, number];
+  safePushTicks: number;
+  wanderAngle: number;
+  justSpawned: boolean;
   variant: ShadeVariant;
+}
+
+export interface DrifterState {
+  id: string;
+  pos: Vec3;
+  state: DrifterBehaviorState;
+  stolen: number;
+  hasStolen: boolean;
+  fleeTicksLeft: number;
+  wanderAngle: number;
+  justSpawned: boolean;
+}
+
+export interface CharmState {
+  id: string;
+  pos: Vec3;
+  available: boolean;
+  respawnTicks: number;
+}
+
+export interface WindState {
+  enabled: boolean;
+  active: boolean;
+  telegraph: boolean;
+  dirDeg: number;
+  ticksLeft: number;
 }
 
 export interface WanderingGirlState {
@@ -158,6 +237,7 @@ export interface SimOptions {
 }
 
 export type SimEvent =
+  | { type: 'event'; tick: number; name: 'night_start'; data: { night: number } }
   | { type: 'event'; tick: number; name: 'mote_picked'; data: { carried: number } }
   | {
       type: 'event';
@@ -167,13 +247,34 @@ export type SimEvent =
     }
   | { type: 'event'; tick: number; name: 'lantern_lit'; data: { lantern_id: string } }
   | { type: 'event'; tick: number; name: 'pulse'; data: { stunned_ids: string[] } }
+  | { type: 'event'; tick: number; name: 'dash'; data: Record<string, never> }
+  | {
+      type: 'event';
+      tick: number;
+      name: 'charm_picked';
+      data: { charm_id: string; charm_ticks: number };
+    }
+  | {
+      type: 'event';
+      tick: number;
+      name: 'drifter_steal';
+      data: { drifter_id: string; amount: number; carried: number };
+    }
+  | {
+      type: 'event';
+      tick: number;
+      name: 'drifter_drop';
+      data: { drifter_id: string; amount: number };
+    }
   | {
       type: 'event';
       tick: number;
       name: 'player_hit';
-      data: { by: 'shade' | 'fall'; flames: number; dropped: number };
+      data: { by: 'shade' | 'fall'; flames: number; dropped: number; lost?: number };
     }
   | { type: 'event'; tick: number; name: 'shade_spawned'; data: { id: string } }
+  | { type: 'event'; tick: number; name: 'paused'; data: Record<string, never> }
+  | { type: 'event'; tick: number; name: 'resumed'; data: Record<string, never> }
   | {
       type: 'event';
       tick: number;
@@ -185,13 +286,24 @@ export interface SnapshotRecord {
   type: 'snapshot';
   tick: number;
   sim_tick: number;
+  night: number;
   state: GameState;
   time_left_s: number;
   score: number;
+  wind: {
+    active: boolean;
+    dir_deg: number;
+  };
   player: {
     pos: Vec3;
+    vel: Vec3;
+    grounded: boolean;
     flames: number;
     carried: number;
+    invuln: boolean;
+    dash_cd_s: number;
+    pulse_cd_s: number;
+    charm_s: number;
   };
   lanterns: Array<{
     id: string;
@@ -208,6 +320,19 @@ export interface SnapshotRecord {
   motes: Array<{
     id: string;
     pos: Vec3;
+    kind: MoteKind;
+    ttl_s: number | null;
+  }>;
+  drifters: Array<{
+    id: string;
+    pos: Vec3;
+    state: DrifterBehaviorState;
+    stolen: number;
+  }>;
+  charms: Array<{
+    id: string;
+    available: boolean;
+    respawn_s: number;
   }>;
 }
 
