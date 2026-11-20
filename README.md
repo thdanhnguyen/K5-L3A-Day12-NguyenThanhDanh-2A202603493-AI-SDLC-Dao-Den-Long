@@ -53,6 +53,17 @@ Sau đó mở `http://127.0.0.1:4173/` trên trình duyệt để chơi (hỗ tr
   node dist/headless/cli.js --seed 42 --night 1 --ticks 14400 --out run.jsonl
   ```
 
+## Sáng tạo của tôi
+Toàn bộ phần sáng tạo chỉ kích hoạt khi `options.creative === true` (chơi trên trình duyệt) và **tự động tắt hoàn toàn (`creative: false`)** trong Headless CLI, Benchmark và Soak test để không làm đổi bất kỳ số liệu hay đầu ra Test Contract nào:
+1. **Nhân vật phụ Bé Lạc trong rừng (`src/sim/creative.ts`):** Đi lạc trên đảo với đèn lồng xanh ngọc; khi Mây tìm thấy sẽ tặng ngay **+5 đom đóm** (kèm âm thanh và thông báo HUD).
+2. **Chim Giấy Đèn Lồng chỉ đường (phím `H`, `src/render/entities.ts`):** Gấp bằng giấy phát sáng bay vòng quanh nón lá của Mây; bấm `H` chim sẽ bay vút về phía chiếc đèn gần nhất cần thắp hoặc châm dầu, tỏa vòng sáng định vị.
+3. **Biến thể Bóng Mực Lớn / Nhỏ & Đom đóm đa sắc (`src/sim/creative.ts`):**
+   - **Đom đóm Hồng ngọc (Ruby):** Cường hóa Tỏa Sáng trong `8 s` (tăng bán kính đẩy lùi và thời gian choáng).
+   - **Đom đóm Ngọc bích (Jade):** Tăng `25%` tốc độ chạy cho Mây trong `6 s`.
+   - **Bóng Mực Lớn & Nhỏ:** Biến thể kích thước và tốc độ tạo nhịp điệu né tránh đa dạng.
+4. **Không gian & Bình minh sống động (`src/render/scene.ts`):** Thảm cây cỏ, bụi hoa phát sáng, hoa đăng trôi trên mặt nước, thuyền gỗ dập dềnh và hiệu ứng **bầu trời chuyển sắc bình minh cam hồng** trong 30 giây cuối trước khi mặt trời lên.
+- **Bằng chứng ngắn:** Unit test `Creative isolation (options.creative = false vs true)` trong [`tests/unit/sim.test.ts`](tests/unit/sim.test.ts) và 31/31 bài test trong `npm run verify` ([`docs/proof/phase-4/SUMMARY.md`](docs/proof/phase-4/SUMMARY.md)) chứng minh `creative: false` giữ nguyên 100% đầu ra chuẩn.
+
 ## Tài liệu liên quan
 - [CHANGELOG.md](CHANGELOG.md) — Lịch sử thay đổi từ `v0.1.0` đến `v1.0.0`
 - [CREDITS.md](CREDITS.md) — Tác giả, công cụ & thư viện
